@@ -15,7 +15,7 @@ on:
         options: ['macos-15-intel', 'macos-26']
 
 concurrency:
-  group: ios-ci-${{ github.ref }}
+  group: ios-ci-${{ github.ref }}-${{ inputs.runner || 'default' }}
   cancel-in-progress: true
 
 jobs:
