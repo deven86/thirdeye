@@ -10,7 +10,8 @@ nonisolated struct AIRequest: Sendable {
     var maxSearches = 3
     /// JSON Schema for guaranteed-shape output (used when web search is off — the two can't be combined on Claude).
     var jsonSchema: JSONValue?
-    var temperature: Double? = 0.2
+    /// Not sent: newer Claude models reject `temperature` (deprecated). Kept for future providers.
+    var temperature: Double? = nil
 }
 
 nonisolated struct AISource: Codable, Hashable, Sendable {
@@ -134,7 +135,6 @@ nonisolated struct AnthropicChat: ChatClient {
             "system": [["type": "text", "text": r.system, "cache_control": ["type": "ephemeral"]]],
             "messages": messages,
         ]
-        if let t = r.temperature { body["temperature"] = t }
         if r.webSearch {
             body["tools"] = [["type": "web_search_20250305", "name": "web_search", "max_uses": r.maxSearches]]
         } else if let schema = r.jsonSchema {

@@ -41,6 +41,8 @@ struct ClaudeResponseTests {
         let format = try #require(config["format"] as? [String: Any])
         #expect(format["type"] as? String == "json_schema")
         #expect(try JSONSerialization.data(withJSONObject: withSchema).count > 0, "body must be valid JSON")
+        #expect(withSchema["temperature"] == nil && withSearch["temperature"] == nil,
+                "Claude 5.x models reject `temperature` (400: deprecated for this model)")
     }
 
     @Test func schemaAvoidsUnsupportedKeywords() throws {

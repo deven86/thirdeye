@@ -124,6 +124,7 @@ final class AnalysisEngine {
              settings.tierAssignments[spec.tier])
         }
         let ids = featureIDs
+        var abortReason: String?
         await withTaskGroup(of: StageResult.self) { group in
             var next = 0
             while next < min(2, jobs.count) {
@@ -137,6 +138,23 @@ final class AnalysisEngine {
                 stageStatus[result.stage] = result.status
                 runningCost += result.costUSD
                 run?.stages = results.sorted { $0.stage < $1.stage }
+                // Stop early when the first two stages hit the same request/key error — the rest would too.
+                if results.count == 2, results.allSatisfy({ $0.status == .unavailable }),
+                   let reason = results.first?.summary, reason == results.last?.summary,
+                   reason.hasPrefix("Provider error 4") || reason.contains("rejected this key") {
+                    abortReason = reason
+                }
+                if abortReason != nil {
+                    while next < jobs.count {
+                        let skipped = StageResult.unavailable(jobs[next].spec.id, name: jobs[next].spec.name,
+                                                              reason: "Skipped — \(abortReason!)")
+                        results.append(skipped)
+                        stageStatus[skipped.stage] = .unavailable
+                        next += 1
+                    }
+                    run?.stages = results.sorted { $0.stage < $1.stage }
+                    continue
+                }
                 if next < jobs.count, !Task.isCancelled {
                     let job = jobs[next]
                     stageStatus[job.spec.id] = .running
@@ -146,6 +164,19 @@ final class AnalysisEngine {
             }
         }
         if Task.isCancelled { return }
+        if let abortReason {
+            results.append(StageResult.unavailable(10, name: StageSpec.spec(10).name, reason: "Skipped — \(abortReason)"))
+            stageStatus[10] = .unavailable
+            run?.stages = results.sorted { $0.stage < $1.stage }
+            run?.composite = 500
+            run?.verdict = Verdict.noTrade.rawValue
+            run?.vetoes = ["The AI provider rejected the request: \(abortReason)"]
+            run?.totalCostUSD = runningCost
+            run?.finishedAt = Date()
+            if let run { context.store.save(run) }
+            phase = .done
+            return
+        }
 
         // 3. Stage 10.
         phase = .finalStage
