@@ -11,10 +11,14 @@ struct HomeView: View {
     @Environment(HotScanStore.self) private var hotScans
 
     private var hotSubtitle: String {
-        guard let last = hotScans.scans.first else { return "AI scans \(settings.hotMarket.title) and suggests the top 3" }
+        guard let last = hotScans.scans.first else {
+            return "AI scans \(settings.hotMarket.title) and analyses the top \(settings.hotCandidates)"
+        }
         let hot = last.hotTrades.map(\.instrument.symbol)
-        return hot.isEmpty ? "Last scan \(last.startedAt.formatted(.relative(presentation: .named))): no hot trades"
-                           : "Last scan: \(hot.joined(separator: ", "))"
+        let watch = last.watchList.count
+        let when = last.startedAt.formatted(.relative(presentation: .named))
+        if !hot.isEmpty { return "Last scan: \(hot.joined(separator: ", "))" + (watch > 0 ? " · \(watch) on watch" : "") }
+        return "Last scan \(when): no hot trades" + (watch > 0 ? " · \(watch) on watch" : "")
     }
     @State private var demoScore = 712
 

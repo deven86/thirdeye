@@ -49,6 +49,10 @@ struct SettingsView: View {
                 Picker(selection: $settings.hotProfile) {
                     ForEach(HoldingProfile.allCases.filter { $0 != .equal }) { Text($0.title).tag($0) }
                 } label: { Label("Hot trades style", systemImage: "clock") }
+                Picker(selection: $settings.hotCandidates) {
+                    Text("Top 3").tag(3)
+                    Text("Top 5").tag(5)
+                } label: { Label("Full analyses per scan", systemImage: "list.number") }
                 NavigationLink { HotTradesView() } label: { Label("Open Hot trades", systemImage: "arrow.right.circle") }
             } header: {
                 Text("Hot trades")

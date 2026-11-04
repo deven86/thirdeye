@@ -75,8 +75,11 @@ nonisolated struct BinanceClient: CandleSource {
         return try Self.parseTopByVolume(data, limit: limit)
     }
 
+    /// Not crypto price exposure: stablecoins, fiat and gold tokens, wrapped duplicates. (New stablecoins are also
+    /// caught by behaviour — see `HotScreener.isPegged` — and tokenised shares by their short history.)
     static let stablecoins: Set<String> = ["USDC", "FDUSD", "TUSD", "DAI", "USDP", "BUSD", "EUR", "EURI", "AEUR", "USDE", "XUSD",
-                                           "PYUSD", "USD1", "RLUSD", "PAXG", "WBTC", "WBETH", "BFUSD"]
+                                           "PYUSD", "USD1", "RLUSD", "PAXG", "XAUT", "WBTC", "WBETH", "BFUSD", "U", "RWUSD",
+                                           "USDS", "USDD", "FRAX"]
 
     static func parseTopByVolume(_ data: Data, limit: Int) throws -> [Instrument] {
         guard let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {

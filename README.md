@@ -30,4 +30,5 @@ cd ios && xcodegen generate && open ThirdEye.xcodeproj
 - [x] **M5 Trades** — upcoming trades, entries/exits, TP tracking, position sizing, P&L journal, paper/real mode, iCloud sync
 - [ ] M6 Monitoring + alerts
 - [x] **M7 Hot trades** — code screen → AI shortlist → full analysis of top 3; HOT only when every check passes
+- [x] **0.8 Scoring v2** — confidence-weighted score, explicit checks with grades and Watch levels, history check of the plan, cleaner Hot-trades universe (DECISIONS #38–43)
 - [ ] M8 Calibration + hardening

@@ -103,7 +103,7 @@ nonisolated struct StageResult: Codable, Hashable, Sendable, Identifiable {
 
     var id: Int { stage }
 
-    /// Confidence-shrunk score: low confidence pulls toward neutral 50.
+    /// Version-1 confidence-shrunk score (low confidence pulls toward 50). Only used to explain older runs.
     var effectiveScore: Double { 50 + confidence * (Double(score) - 50) }
 
     static func unavailable(_ stage: Int, name: String, reason: String) -> StageResult {
@@ -182,6 +182,14 @@ nonisolated struct AnalysisRun: Codable, Hashable, Sendable, Identifiable {
     var totalCostUSD: Double
     var promptVersion: String
     var featurePackHash: String
+    // 0.8+ (absent in older saved runs, so all optional)
+    var scoringVersion: Int? = nil
+    var checks: [ScoreCheck]? = nil
+    var grade: String? = nil
+    var lean: String? = nil
+    var watchLevels: [String]? = nil
+    var evidence: Double? = nil
+    var baseRate: PlanReplay.BaseRate? = nil
 
     var buyScore: Int? { composite }
     var sellScore: Int? { composite.map { 1010 - $0 } }

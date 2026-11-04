@@ -9,6 +9,8 @@ struct HotTradesView: View {
     @State private var engine = HotTradesEngine()
     @State private var confirm = false
 
+    private var estimate: String { String(format: "%.2f", HotTradesEngine.estimate(settings: settings)) }
+
     var body: some View {
         @Bindable var settings = settings
         List {
@@ -18,6 +20,10 @@ struct HotTradesView: View {
                 }
                 Picker("Holding style", selection: $settings.hotProfile) {
                     ForEach(HoldingProfile.allCases.filter { $0 != .equal }) { Text($0.title).tag($0) }
+                }
+                Picker("Full analyses", selection: $settings.hotCandidates) {
+                    Text("Top 3").tag(3)
+                    Text("Top 5").tag(5)
                 }
                 if let needs = settings.hotMarket.needs { Text(needs).font(.caption).foregroundStyle(palette.textSecondary) }
                 Button {
@@ -31,13 +37,14 @@ struct HotTradesView: View {
                     Button("Stop", role: .destructive) { engine.cancel() }
                 }
             } footer: {
-                Text("1) Code screens the whole list on its charts (free). 2) A fast AI model shortlists 3. 3) Each gets the full 10-stage analysis. Estimated ≈ $\(String(format: "%.2f", HotTradesEngine.estimate(settings: settings))) per scan. Only results that pass every check are shown as hot trades.")
+                Text("1) Code screens the list on its charts (free) and drops new listings and pegged coins. 2) A fast AI model shortlists \(settings.hotCandidates). 3) Each gets the full 10-stage analysis and every check. Estimated ≈ $\(estimate) per scan. HOT = passed every check; WATCH = leans clearly one way but failed a check.")
             }
 
             if engine.phase != .idle { progressSection }
 
             if let scan = engine.phase == .idle ? scans.scans.first : engine.scan, !scan.picks.isEmpty {
                 resultSection(scan)
+                contextSection(scan)
             }
 
             if scans.scans.count > 1 {
@@ -46,7 +53,7 @@ struct HotTradesView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(s.market.title).font(.callout)
-                                Text("\(s.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(s.hotTrades.count) hot · $\(String(format: "%.2f", s.costUSD))")
+                                Text("\(s.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(s.hotTrades.count) hot · \(s.watchList.count) watch · $\(String(format: "%.2f", s.costUSD))")
                                     .font(.caption).foregroundStyle(palette.textSecondary)
                             }
                             Spacer()
@@ -57,10 +64,10 @@ struct HotTradesView: View {
             }
         }
         .navigationTitle("Hot trades")
-        .confirmationDialog("Run a hot-trades scan on \(settings.hotMarket.title)? Estimated cost ≈ $\(String(format: "%.2f", HotTradesEngine.estimate(settings: settings))), charged to your AI account. Takes about 5–10 minutes.",
+        .confirmationDialog("Run a hot-trades scan on \(settings.hotMarket.title)? \(settings.hotCandidates) full analyses, estimated cost ≈ $\(estimate), charged to your AI account. Takes about \(settings.hotCandidates * 2)–\(settings.hotCandidates * 3) minutes — keep the app open.",
                             isPresented: $confirm, titleVisibility: .visible) {
             Button("Run scan") {
-                engine.start(market: settings.hotMarket, profile: settings.hotProfile,
+                engine.start(market: settings.hotMarket, profile: settings.hotProfile, candidates: settings.hotCandidates,
                              context: .init(market: market, settings: settings, store: analyses), store: scans)
             }
         }
@@ -94,8 +101,8 @@ struct HotTradesView: View {
         switch engine.phase {
         case .idle: ""
         case .screening(let done, let total): "Screening charts \(done + 1) of \(total)…"
-        case .shortlisting: "AI is shortlisting 3 candidates…"
-        case .analysing(let i, let symbol): "Full analysis \(i) of 3: \(symbol)"
+        case .shortlisting: "AI is shortlisting candidates…"
+        case .analysing(let i, let total, let symbol): "Full analysis \(i) of \(total): \(symbol)"
         case .done: "Scan complete"
         case .failed(let message): message
         }
@@ -107,18 +114,19 @@ struct HotTradesView: View {
             if scan.finishedAt != nil && hot.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("No hot trades right now").font(.headline)
-                    Text("The three strongest candidates were analysed in full and none passed every check. Waiting is a valid decision — run again later or try another market.")
+                    Text(scan.watchList.isEmpty
+                         ? "The strongest candidates were analysed in full and none passed every check. Waiting is a valid decision — run again later or try another market."
+                         : "None passed every check. \(scan.watchList.count) \(scan.watchList.count == 1 ? "leans" : "lean") clearly one way — they are on WATCH with the levels that would strengthen the case.")
                         .font(.callout).foregroundStyle(palette.textSecondary)
                 }
             }
-            ForEach(scan.picks, id: \.instrument.id) { pick in
+            ForEach(scan.ranked, id: \.instrument.id) { pick in
                 let run = pick.runID.flatMap { id in analyses.runs.first { $0.id == id } }
-                let isHot = hot.contains { $0.instrument.id == pick.instrument.id }
                 Group {
                     if let run {
-                        NavigationLink { AnalysisReportView(run: run).navigationTitle(run.instrument.symbol) } label: { pickRow(pick, isHot: isHot) }
+                        NavigationLink { AnalysisReportView(run: run).navigationTitle(run.instrument.symbol) } label: { pickRow(pick, run: run) }
                     } else {
-                        pickRow(pick, isHot: false)
+                        pickRow(pick, run: nil)
                     }
                 }
             }
@@ -129,20 +137,70 @@ struct HotTradesView: View {
         }
     }
 
-    private func pickRow(_ pick: HotPick, isHot: Bool) -> some View {
+    @ViewBuilder
+    private func contextSection(_ scan: HotScan) -> some View {
+        if scan.regime != nil || scan.shortlistNote != nil || !scan.skipped.isEmpty {
+            Section("Scan details") {
+                if let regime = scan.regime {
+                    Label(regime, systemImage: "globe").font(.caption).foregroundStyle(palette.textSecondary)
+                }
+                if let note = scan.shortlistNote {
+                    Label(note, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(palette.warning)
+                }
+                if !scan.skipped.isEmpty {
+                    DisclosureGroup("Skipped (\(scan.skipped.count))") {
+                        ForEach(scan.skipped, id: \.self) { Text($0).font(.caption2).foregroundStyle(palette.textSecondary) }
+                    }
+                    .font(.caption)
+                }
+            }
+        }
+    }
+
+    private func pickRow(_ pick: HotPick, run: AnalysisRun?) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Text(pick.composite.map(String.init) ?? "…")
                 .font(.title3.weight(.bold).monospacedDigit())
                 .foregroundStyle(pick.composite.map { palette.color(forComposite: $0) } ?? palette.neutral)
                 .frame(minWidth: 48, alignment: .leading)
             VStack(alignment: .leading, spacing: 3) {
-                HStack {
+                HStack(spacing: 6) {
                     Text(pick.instrument.symbol).font(.callout.weight(.semibold))
-                    if isHot { Chip(text: "HOT", color: palette.up) }
-                    if let v = pick.verdict.flatMap(Verdict.init(rawValue:)) { Text(v.title).font(.caption).foregroundStyle(palette.textSecondary) }
+                    statusChip(pick)
+                    if let v = pick.verdict.flatMap(Verdict.init(rawValue:)), pick.status == .hot {
+                        Text(v.title).font(.caption).foregroundStyle(palette.textSecondary)
+                    }
                 }
-                Text(pick.reason).font(.caption).foregroundStyle(palette.textSecondary).lineLimit(3)
+                if !pick.reason.isEmpty {
+                    Text(pick.reason).font(.caption).foregroundStyle(palette.textSecondary).lineLimit(3)
+                }
+                if let error = pick.error {
+                    Text(error).font(.caption2).foregroundStyle(palette.warning).lineLimit(3)
+                } else if pick.status == .hot, let grade = pick.grade {
+                    Text("Grade \(grade) · passed every check").font(.caption2).foregroundStyle(palette.up)
+                } else if let blocker = pick.blocker {
+                    Text(blocker).font(.caption2).foregroundStyle(palette.textSecondary).lineLimit(3)
+                }
+                if pick.status == .watch, let level = run?.watchLevels?.first {
+                    Text(level).font(.caption2).foregroundStyle(palette.accent).lineLimit(2)
+                }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func statusChip(_ pick: HotPick) -> some View {
+        switch pick.status {
+        case .hot:
+            Chip(text: pick.grade.map { "HOT · \($0)" } ?? "HOT", color: palette.up)
+        case .watch:
+            Chip(text: pick.lean == "short" ? "WATCH ↓" : "WATCH ↑", color: palette.accent)
+        case .wait:
+            Chip(text: "WAIT", color: palette.neutral)
+        case .failed:
+            Chip(text: "FAILED", color: palette.warning)
+        case .pending:
+            EmptyView()
         }
     }
 }

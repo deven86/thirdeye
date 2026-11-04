@@ -8,13 +8,32 @@ struct AnalysisReportView: View {
     @State private var showNewTrade = false
 
     private var verdict: Verdict { Verdict(rawValue: run.verdict ?? "") ?? .noTrade }
-    private var breakdown: [Scoring.Breakdown] { Scoring.composite(run.stages, profile: run.profile).breakdown }
+    private var isV2: Bool { (run.scoringVersion ?? 1) >= 2 }
+    private var breakdown: [Scoring.Breakdown] {
+        isV2 ? Scoring.composite(run.stages, profile: run.profile).breakdown
+             : Scoring.compositeV1(run.stages, profile: run.profile).breakdown
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 scoreCard
-                if !run.vetoes.isEmpty { vetoCard }
+                if let checks = run.checks, !checks.isEmpty {
+                    checksCard(checks)
+                } else if !run.vetoes.isEmpty {
+                    vetoCard
+                }
+                if verdict == .noTrade, let levels = run.watchLevels, !levels.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label(run.lean == nil ? "Levels to watch" : "On watch — leaning \(run.lean == "short" ? "short" : "long")",
+                              systemImage: "binoculars")
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(palette.accent)
+                        ForEach(levels, id: \.self) { Text($0).font(.callout).foregroundStyle(palette.textPrimary) }
+                        Text("A close beyond a level is a reason to re-run the analysis, not a trade by itself.")
+                            .font(.caption2).foregroundStyle(palette.textSecondary)
+                    }
+                    .dataCard()
+                }
                 if let cautions = run.cautions, !cautions.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         Label("Caution", systemImage: "exclamationmark.circle").font(.subheadline.weight(.semibold)).foregroundStyle(palette.textSecondary)
@@ -24,6 +43,7 @@ struct AnalysisReportView: View {
                 }
                 if let plan = run.plan {
                     PlanCard(plan: plan, tradable: verdict != .noTrade, currency: run.instrument.currency)
+                    if let base = run.baseRate { BaseRateCard(base: base, symbol: run.instrument.symbol) }
                     AdaptiveButton(title: "Save as upcoming trade", systemImage: "bookmark", kind: verdict == .noTrade ? .secondary : .primary) {
                         showNewTrade = true
                     }
@@ -57,6 +77,11 @@ struct AnalysisReportView: View {
                 label("Buy score", "\(run.buyScore ?? 0)")
                 label("Sell score", "\(run.sellScore ?? 0)")
                 label("Profile", run.profile.title)
+                if let grade = run.grade { label("Grade", grade) }
+            }
+            if verdict == .noTrade, let lean = run.lean {
+                Text("No trade yet, but the analysis leans \(lean == "short" ? "down" : "up") — on watch.")
+                    .font(.caption).foregroundStyle(palette.accent).multilineTextAlignment(.center)
             }
             if verdict == .noTrade, let c = run.composite, Verdict(composite: c) != .noTrade {
                 Text("The number alone says \(Verdict(composite: c).title), but the checks below block the trade.")
@@ -86,16 +111,40 @@ struct AnalysisReportView: View {
         .dataCard()
     }
 
+    private func checksCard(_ checks: [ScoreCheck]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(verdict == .noTrade ? "Why this is “No trade”" : "Every check passed", systemImage: verdict == .noTrade ? "hand.raised" : "checkmark.seal")
+                .font(.headline)
+                .foregroundStyle(verdict == .noTrade ? palette.warning : palette.up)
+            ForEach(checks) { check in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: check.passed ? "checkmark.circle.fill" : check.blocking ? "xmark.circle.fill" : "exclamationmark.circle")
+                        .foregroundStyle(check.passed ? palette.up : check.blocking ? palette.down : palette.warning)
+                        .font(.callout)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(check.title).font(.callout.weight(.semibold)).foregroundStyle(palette.textPrimary)
+                        Text(check.detail).font(.caption).foregroundStyle(palette.textSecondary)
+                    }
+                }
+            }
+            let data = run.vetoes.filter { $0.hasPrefix("Data:") }
+            ForEach(data, id: \.self) { Text($0).font(.caption).foregroundStyle(palette.warning) }
+        }
+        .dataCard()
+    }
+
     private var mathsCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("How this score was calculated").font(.headline).foregroundStyle(palette.textPrimary)
-            Text("Each stage score is pulled toward 50 when confidence is low: effective = 50 + confidence × (score − 50). Then each is multiplied by its weight for the \(run.profile.title) profile.")
+            Text(isV2
+                 ? "Score = 10 × the confidence-weighted average of the completed stages: each stage counts by weight (\(run.profile.title) profile) × confidence. Low confidence makes a stage count less; it no longer drags the score toward 500. Failed stages are left out."
+                 : "Older method (before 0.8): each stage score was pulled toward 50 when confidence was low — effective = 50 + confidence × (score − 50) — then multiplied by its weight. This squeezed almost every result into the No-trade band.")
                 .font(.caption)
                 .foregroundStyle(palette.textSecondary)
             Grid(alignment: .trailing, horizontalSpacing: 10, verticalSpacing: 6) {
                 GridRow {
                     Text("Stage").gridColumnAlignment(.leading)
-                    Text("Weight"); Text("Score"); Text("Conf."); Text("Points")
+                    Text("Weight"); Text("Score"); Text("Conf."); Text(isV2 ? "Share" : "Points")
                 }
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(palette.textSecondary)
@@ -105,9 +154,10 @@ struct AnalysisReportView: View {
                         Text("\(Int(b.weight))")
                         Text("\(b.score)")
                         Text(String(format: "%.2f", b.confidence))
-                        Text(String(format: "%.0f", b.contribution))
+                        Text(isV2 ? (b.counted ? "\(Int((b.share * 100).rounded()))%" : "—") : String(format: "%.0f", b.contribution))
                     }
                     .font(.caption.monospacedDigit())
+                    .foregroundStyle(b.counted || !isV2 ? palette.textPrimary : palette.textSecondary)
                 }
                 Divider()
                 GridRow {
@@ -117,7 +167,7 @@ struct AnalysisReportView: View {
                 }
                 .font(.caption.monospacedDigit())
             }
-            Text("Bands: ≥750 Strong Buy · 620–749 Buy · 381–619 No trade · 251–380 Sell · ≤250 Strong Sell. Sell score = 1010 − total.")
+            Text("Bands: ≥750 Strong Buy · 620–749 Buy · 381–619 No trade · 251–380 Sell · ≤250 Strong Sell. Sell score = 1010 − total.\(isV2 ? " Buy/Sell also needs every blocking check above to pass." : "")")
                 .font(.caption2)
                 .foregroundStyle(palette.textSecondary)
         }
@@ -132,6 +182,45 @@ struct AnalysisReportView: View {
         }
         .font(.caption2)
         .foregroundStyle(palette.textSecondary)
+    }
+}
+
+/// How trades managed exactly like this plan behaved on this product's own history. Information, not a forecast.
+private struct BaseRateCard: View {
+    @Environment(\.palette) private var palette
+    let base: PlanReplay.BaseRate
+    let symbol: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("History check — not a forecast", systemImage: "clock.arrow.circlepath")
+                .font(.subheadline.weight(.semibold)).foregroundStyle(palette.textPrimary)
+            Text("Every past \(base.side) entry on \(symbol) since \(base.from.formatted(date: .abbreviated, time: .omitted)), managed like this plan: stop \(String(format: "%.1f", base.stopATR)) ATR, the same take-profit ladder, closed after \(base.horizonBars) bars, after ~\(String(format: "%.2g", base.costPct))% costs.")
+                .font(.caption).foregroundStyle(palette.textSecondary)
+            HStack(alignment: .top) {
+                stat("Stop hit first", pct(base.stopFirstPct))
+                stat("Reached TP1", pct(base.tp1Pct))
+                stat("Reached TP2", pct(base.tp2Pct))
+            }
+            HStack(alignment: .top) {
+                stat("Ended in profit", pct(base.winPct))
+                stat("Average result", String(format: "%+.2fR", base.averageR))
+                stat("Worst losing run", "\(base.longestLosingStreak) in a row")
+            }
+            Text("\(base.entries) replays, \(base.independent) of them non-overlapping. Plan your size so \(max(base.longestLosingStreak, 3)) losses in a row are survivable. Past results in similar conditions did not predict the next trade in our tests, so this does not change the verdict.")
+                .font(.caption2).foregroundStyle(palette.textSecondary)
+        }
+        .dataCard()
+    }
+
+    private func pct(_ x: Double) -> String { "\(Int((x * 100).rounded()))%" }
+
+    private func stat(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value).font(.callout.weight(.semibold).monospacedDigit()).foregroundStyle(palette.textPrimary)
+            Text(title).font(.caption2).foregroundStyle(palette.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

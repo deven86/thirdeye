@@ -16,6 +16,7 @@ final class AppSettings {
         static let capital = "settings.capitalByCurrency"
         static let hotMarket = "settings.hotMarket"
         static let hotProfile = "settings.hotProfile"
+        static let hotCandidates = "settings.hotCandidates"
     }
 
     private let defaults: UserDefaults
@@ -61,6 +62,11 @@ final class AppSettings {
         didSet { defaults.set(hotProfile.rawValue, forKey: Keys.hotProfile) }
     }
 
+    /// How many shortlisted products get the full 10-stage analysis (3 or 5).
+    var hotCandidates: Int {
+        didSet { defaults.set(hotCandidates, forKey: Keys.hotCandidates) }
+    }
+
     var tierAssignments: [ModelTier: ModelRef] {
         didSet { saveAssignments() }
     }
@@ -78,6 +84,8 @@ final class AppSettings {
         capital = defaults.dictionary(forKey: Keys.capital) as? [String: Double] ?? [:]
         hotMarket = HotMarket(rawValue: defaults.string(forKey: Keys.hotMarket) ?? "") ?? .crypto
         hotProfile = HoldingProfile(rawValue: defaults.string(forKey: Keys.hotProfile) ?? "") ?? .swing
+        let candidates = defaults.integer(forKey: Keys.hotCandidates)
+        hotCandidates = candidates == 5 ? 5 : 3
         if let data = defaults.data(forKey: Keys.tierAssignments),
            let decoded = try? JSONDecoder().decode([String: ModelRef].self, from: data) {
             var map: [ModelTier: ModelRef] = [:]

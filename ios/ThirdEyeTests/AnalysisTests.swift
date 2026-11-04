@@ -165,20 +165,151 @@ struct ScoringTests {
         #expect(Scoring.composite(stages, profile: .swing).value == 900, "any weights summing to 100 give 900")
     }
 
-    @Test func lowConfidencePullsTowardNeutral() {
+    @Test func confidenceWeightsStagesInsteadOfShrinkingThem() {
         let stages = (1...10).map { stage($0, 90, conf: 0.5) }
-        // effective = 50 + 0.5 × 40 = 70 → 700
-        #expect(Scoring.composite(stages, profile: .equal).value == 700)
+        #expect(Scoring.composite(stages, profile: .equal).value == 900, "v2: uniform confidence changes nothing")
+        #expect(Scoring.compositeV1(stages, profile: .equal).value == 700, "v1: 50 + 0.5 × 40 = 70 → 700")
+        // Five confident 80s and five unsure 40s: 10 × (5·8·80 + 5·2·40) / (5·8 + 5·2) = 720.
+        let mixed = (1...10).map { $0 <= 5 ? stage($0, 80, conf: 0.8) : stage($0, 40, conf: 0.2) }
+        #expect(Scoring.composite(mixed, profile: .equal).value == 720)
+        let rows = Scoring.composite(mixed, profile: .equal).breakdown
+        #expect(abs(rows.map(\.contribution).reduce(0, +) - 720) < 1e-9, "contributions add up to the total")
+        #expect(abs(rows.map(\.share).reduce(0, +) - 1) < 1e-12)
     }
 
-    @Test func unavailableStagesCountAsNeutralAndVeto() {
+    @Test func unavailableStagesAreLeftOutAndBlock() {
         var stages = (1...10).map { stage($0, 90) }
         for i in 0..<4 { stages[i].status = .unavailable }
-        let c = Scoring.composite(stages, profile: .equal).value
-        #expect(c == 740) // 6 × 90 + 4 × 50 = 740
+        #expect(Scoring.composite(stages, profile: .equal).value == 900, "failed stages no longer count as 50")
+        #expect(Scoring.compositeV1(stages, profile: .equal).value == 740)
         let v = Scoring.vetoes(stages: stages, plan: nil, lastCandleAge: 60, timeframe: .d1, profile: .equal)
         #expect(v.contains { $0.contains("Only 6 of 10") })
-        #expect(Scoring.verdict(composite: c, vetoes: v) == .noTrade)
+        let e = Scoring.evaluate(stages: stages, plan: nil, lastCandleAge: 60, profile: .equal, instrument: crypto)
+        #expect(e.verdict == .noTrade)
+        #expect(e.checks.contains { $0.id == "stages" && !$0.passed })
+    }
+
+    @Test func noStageCompletedIsNeutral() {
+        let stages = (1...10).map { stage($0, 90, status: .unavailable) }
+        #expect(Scoring.composite(stages, profile: .swing).value == 500)
+    }
+
+    // MARK: Version-2 evaluation
+
+    var crypto: Instrument {
+        Instrument(id: "binance:BTCUSDT", provider: .binance, symbol: "BTC/USDT", name: "BTC", exchange: "Binance",
+                   segment: "CRYPTO", kind: .crypto, currency: "USDT")
+    }
+    var nseShare: Instrument {
+        Instrument(id: "NSE_EQ|INE002A01018", provider: .upstox, symbol: "RELIANCE", name: "Reliance", exchange: "NSE",
+                   segment: "NSE_EQ", kind: .equity, currency: "INR")
+    }
+    func swingStages(_ scores: [Int], _ confs: [Double]) -> [StageResult] {
+        (1...10).map { stage($0, scores[$0 - 1], conf: confs[$0 - 1]) }
+    }
+    func plan(_ side: String) -> TradePlan {
+        side == "long"
+            ? TradePlanner.build(.init(side: "long", entryLow: 99, entryHigh: 101, stopLoss: 95, holdingDays: 20, invalidation: "", rationale: ""),
+                                 lastPrice: 100, atr: 3, tick: 0.05)
+            : TradePlanner.build(.init(side: "short", entryLow: 99, entryHigh: 101, stopLoss: 105, holdingDays: 20, invalidation: "", rationale: ""),
+                                 lastPrice: 100, atr: 3, tick: 0.05)
+    }
+
+    @Test func clearlyBearishPictureIsASellNow() {
+        // Every stage bearish with ordinary confidence: v1 said 391 (No trade); v2 says 322 (Sell).
+        let stages = swingStages([38, 45, 48, 40, 28, 26, 40, 40, 30, 26], [0.6, 0.5, 0.5, 0.5, 0.7, 0.7, 0.6, 0.5, 0.6, 0.65])
+        #expect(Scoring.compositeV1(stages, profile: .swing).value == 391)
+        let e = Scoring.evaluate(stages: stages, plan: plan("short"), lastCandleAge: 60, profile: .swing, instrument: crypto)
+        #expect(e.composite == 322)
+        #expect(e.verdict == .sell)
+        #expect(e.checks.allSatisfy(\.passed), "\(e.checks.filter { !$0.passed })")
+        #expect(abs(e.consensus.evidence - 0.612) < 1e-9)
+        #expect(abs(e.consensus.support - 0.97) < 1e-9)
+        #expect(e.consensus.opposition == 0)
+        #expect(e.grade == "A")
+        #expect(e.lean == nil)
+    }
+
+    @Test func indianSharesCannotBeHeldShort() {
+        let stages = swingStages([38, 45, 48, 40, 28, 26, 40, 40, 30, 26], [0.6, 0.5, 0.5, 0.5, 0.7, 0.7, 0.6, 0.5, 0.6, 0.65])
+        let e = Scoring.evaluate(stages: stages, plan: plan("short"), lastCandleAge: 60, profile: .swing, instrument: nseShare)
+        #expect(e.verdict == .noTrade)
+        #expect(e.checks.contains { $0.id == "short" && !$0.passed })
+        #expect(e.lean == nil, "no 'watch short' on a product that cannot be shorted")
+        let intraday = Scoring.evaluate(stages: stages, plan: plan("short"), lastCandleAge: 60, profile: .scalpIntraday, instrument: nseShare)
+        #expect(!intraday.checks.contains { $0.id == "short" })
+    }
+
+    @Test func strongAndUnanimousIsAPlus() {
+        let stages = swingStages([75, 60, 60, 70, 82, 85, 70, 68, 80, 85], [0.7, 0.6, 0.6, 0.6, 0.8, 0.8, 0.7, 0.6, 0.7, 0.8])
+        let e = Scoring.evaluate(stages: stages, plan: plan("long"), lastCandleAge: 60, profile: .swing, instrument: crypto)
+        #expect(e.composite == 779)
+        #expect(e.verdict == .strongBuy)
+        #expect(e.grade == "A+")
+    }
+
+    @Test func oneLoudStageCannotCarryTheVerdict() {
+        // Stage 10 at 90 with high confidence, everything else neutral: number 624, but only 20 % agrees.
+        let stages = swingStages([50, 50, 50, 50, 50, 50, 50, 50, 50, 90], [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.9])
+        let e = Scoring.evaluate(stages: stages, plan: plan("long"), lastCandleAge: 60, profile: .swing, instrument: crypto)
+        #expect(e.composite == 624)
+        #expect(e.verdict == .noTrade)
+        #expect(e.checks.contains { $0.id == "agreement" && !$0.passed })
+        #expect(e.lean == "long", "still worth watching")
+    }
+
+    @Test func buyNeedsAPlanThatAgrees() {
+        let stages = swingStages([75, 60, 60, 70, 82, 85, 70, 68, 80, 85], [0.7, 0.6, 0.6, 0.6, 0.8, 0.8, 0.7, 0.6, 0.7, 0.8])
+        let none = Scoring.evaluate(stages: stages, plan: nil, lastCandleAge: 60, profile: .swing, instrument: crypto)
+        #expect(none.verdict == .noTrade, "no entry/stop → no trade")
+        #expect(none.checks.contains { $0.id == "plan" && !$0.passed })
+        let contra = Scoring.evaluate(stages: stages, plan: plan("short"), lastCandleAge: 60, profile: .swing, instrument: crypto)
+        #expect(contra.verdict == .noTrade)
+        #expect(contra.checks.first { $0.id == "plan" }?.detail.contains("short plan") == true)
+    }
+
+    @Test func thinEvidenceBlocks() {
+        let stages = swingStages([75, 60, 60, 70, 82, 85, 70, 68, 80, 85], [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3])
+        let e = Scoring.evaluate(stages: stages, plan: plan("long"), lastCandleAge: 60, profile: .swing, instrument: crypto)
+        #expect(e.composite >= 750, "uniform confidence leaves the number alone")
+        #expect(e.verdict == .noTrade)
+        #expect(e.checks.contains { $0.id == "evidence" && !$0.passed })
+    }
+
+    @Test func productEventInsideHoldingBlocksButMacroOnlyCautions() {
+        var stages = swingStages([75, 60, 60, 70, 82, 85, 70, 68, 80, 85], [0.7, 0.6, 0.6, 0.6, 0.8, 0.8, 0.7, 0.6, 0.7, 0.8])
+        stages[1].extra = ["next_major_event_days": "3"]
+        let e = Scoring.evaluate(stages: stages, plan: plan("long"), lastCandleAge: 60, profile: .swing, instrument: crypto)
+        #expect(e.verdict == .noTrade)
+        #expect(e.checks.contains { $0.id == "event" && !$0.passed && $0.blocking })
+        stages[1].extra = ["next_macro_event_days": "2"]
+        let macro = Scoring.evaluate(stages: stages, plan: plan("long"), lastCandleAge: 60, profile: .swing, instrument: crypto)
+        #expect(macro.verdict == .strongBuy)
+        #expect(macro.cautions.count == 1)
+    }
+
+    @Test func middlingScoresAreWatchOrWait() {
+        let lean = swingStages([60, 60, 60, 60, 60, 60, 60, 60, 60, 60], Array(repeating: 0.5, count: 10))
+        let e = Scoring.evaluate(stages: lean, plan: plan("long"), lastCandleAge: 60, profile: .swing, instrument: crypto)
+        #expect(e.composite == 600)
+        #expect(e.verdict == .noTrade)
+        #expect(e.lean == "long")
+        let flat = swingStages(Array(repeating: 52, count: 10), Array(repeating: 0.5, count: 10))
+        #expect(Scoring.evaluate(stages: flat, plan: nil, lastCandleAge: 60, profile: .swing, instrument: crypto).lean == nil)
+    }
+
+    @Test func watchLevelsNameTheNearestZones() {
+        let zones = [
+            Levels.Zone(kind: .resistance, price: 110, low: 109, high: 111, touches: 3, lastTouch: 10),
+            Levels.Zone(kind: .resistance, price: 105, low: 104, high: 106, touches: 1, lastTouch: 12),
+            Levels.Zone(kind: .support, price: 95, low: 94, high: 96, touches: 2, lastTouch: 8),
+        ]
+        let long = Scoring.watchLevels(zones: zones, lastPrice: 100, lean: "long", currency: "USD")
+        #expect(long.count == 2)
+        #expect(long[0].contains("above 105.00") && long[0].contains("1 touch)"))
+        #expect(long[1].contains("below 95.00"))
+        let short = Scoring.watchLevels(zones: zones, lastPrice: 100, lean: "short", currency: "USD")
+        #expect(short[0].contains("below 95.00"))
     }
 
     @Test func eventInsideHoldingWindowVetoes() {

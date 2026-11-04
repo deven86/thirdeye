@@ -99,10 +99,12 @@ final class AnalysisEngine {
         var featureIDs = Set<String>()
         var snapshots: [Timeframe: FeatureEngine.Snapshot] = [:]
         var lastCandle: Candle?
+        var planCandles: [Candle] = []
         var dataErrors: [String] = []
         for tf in [Timeframe.mo1, .w1, .d1, .h1, .m15] {
             do {
                 let candles = try await context.market.candles(for: instrument, timeframe: tf)
+                if tf == profile.planTimeframe { planCandles = candles }
                 if tf == .d1 || lastCandle == nil || (candles.last?.time ?? .distantPast) > (lastCandle?.time ?? .distantPast) {
                     if let l = candles.last { lastCandle = l }
                 }
@@ -183,6 +185,7 @@ final class AnalysisEngine {
             run?.stages = results.sorted { $0.stage < $1.stage }
             run?.composite = 500
             run?.verdict = Verdict.noTrade.rawValue
+            run?.scoringVersion = Scoring.version
             run?.vetoes = ["The AI provider rejected the request: \(abortReason)"]
             run?.totalCostUSD = runningCost
             run?.finishedAt = Date()
@@ -196,7 +199,8 @@ final class AnalysisEngine {
         let spec10 = StageSpec.spec(10)
         stageStatus[10] = .running
         let prompt10 = Prompts.user(spec: spec10, instrument: instrument, profile: profile, lastPrice: lastCandle.close,
-                                    packs: packs, priorStages: results, today: Date())
+                                    packs: packs, priorStages: results, today: Date(),
+                                    canShort: !Scoring.cannotHoldShort(instrument, profile: profile))
         let final = await Self.runStage(spec10, prompt: prompt10, ref: settings.tierAssignments[.deep],
                                         repairRef: settings.tierAssignments[.fast], featureIDs: featureIDs)
         results.append(final)
@@ -230,19 +234,32 @@ final class AnalysisEngine {
             }
         }
 
-        // 5. Score (code only), vetoes, verdict, save.
-        let (composite, _) = Scoring.composite(results, profile: profile)
-        let vetoes = Scoring.vetoes(stages: results, plan: plan, lastCandleAge: Date().timeIntervalSince(lastCandle.time),
-                                    timeframe: profile.planTimeframe, profile: profile)
-        var verdict = Scoring.verdict(composite: composite, vetoes: vetoes)
-        // A plan direction that contradicts the score is not tradable.
-        if let plan, (plan.side == "long" && composite < 620) || (plan.side == "short" && composite > 380) {
-            verdict = .noTrade
+        // 5. Score, checks and verdict (code only), then the plan's history replay (information only), save.
+        let evaluation = Scoring.evaluate(stages: results, plan: plan, lastCandleAge: Date().timeIntervalSince(lastCandle.time),
+                                          profile: profile, instrument: instrument)
+        var baseRate: PlanReplay.BaseRate?
+        if let plan, let atr, atr > 0, snapshots[profile.planTimeframe] != nil, !planCandles.isEmpty {
+            let stopATR = min(max(plan.riskPerUnit / atr, 0.25), 6)
+            let horizon = PlanReplay.horizonBars(days: plan.holdingDays, timeframe: profile.planTimeframe, instrument: instrument)
+            let cost = PlanReplay.roundTripCostPct(instrument)
+            let candles = planCandles
+            let side = plan.side
+            baseRate = await Task.detached(priority: .userInitiated) {
+                PlanReplay.baseRate(candles, side: side, stopATR: stopATR, horizon: horizon, costPct: cost)
+            }.value
         }
-        run?.composite = composite
-        run?.verdict = verdict.rawValue
-        run?.vetoes = vetoes + dataErrors.map { "Data: \($0)" }
-        run?.cautions = Scoring.cautions(stages: results, profile: profile)
+        run?.composite = evaluation.composite
+        run?.verdict = evaluation.verdict.rawValue
+        run?.vetoes = evaluation.vetoes + dataErrors.map { "Data: \($0)" }
+        run?.cautions = evaluation.cautions
+        run?.scoringVersion = Scoring.version
+        run?.checks = evaluation.checks
+        run?.grade = evaluation.grade
+        run?.lean = evaluation.lean
+        run?.evidence = evaluation.consensus.evidence
+        run?.baseRate = baseRate
+        run?.watchLevels = Scoring.watchLevels(zones: planSnap?.zones ?? [], lastPrice: lastCandle.close,
+                                               lean: evaluation.lean ?? evaluation.side, currency: instrument.currency)
         run?.plan = plan
         run?.verifierNotes = verifierNotes
         run?.totalCostUSD = runningCost

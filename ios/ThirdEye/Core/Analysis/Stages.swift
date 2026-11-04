@@ -12,7 +12,7 @@ nonisolated struct StageSpec: Sendable, Identifiable {
     var packs: [Timeframe]
     var task: String
 
-    static let promptVersion = "p3-2026-11-04"
+    static let promptVersion = "p4-2026-11-04"
 
     static let all: [StageSpec] = [
         StageSpec(id: 1, name: "Product news", tier: .fast, webSearch: true, maxSearches: 2, maxTokens: 4000, packs: [],
@@ -79,8 +79,11 @@ nonisolated struct StageSpec: Sendable, Identifiable {
                   directional score for the chosen holding profile, then a trade plan: \
                   "side" ("long", "short" or "none"), "entry_low", "entry_high", "stop_loss" (price levels taken from \
                   the feature packs — e.g. beyond a support/resistance zone or ATR-based), "holding_days" (integer) and \
-                  "invalidation" (one sentence: what would prove the plan wrong). Use "none" with null prices if there is no \
-                  sound trade. Do NOT invent targets — take-profit levels are computed in code from your entry and stop.
+                  "invalidation" (one sentence: what would prove the plan wrong). Propose a plan whenever your score is \
+                  60 or more (long) or 40 or less (short) and a sound entry and stop exist: the entry zone near the last \
+                  price (within about 1 ATR), the stop beyond the nearest meaningful level, usually 1–2.5 ATR from entry. \
+                  Use "none" with null prices only when your score is between 41 and 59 or no sound entry/stop exists. \
+                  Do NOT invent targets — take-profit levels are computed in code from your entry and stop (1R to 4R).
                   """),
     ]
 
@@ -94,10 +97,14 @@ nonisolated enum Prompts {
 
     Rules — follow all of them:
     1. Output ONLY one JSON object, no prose before or after, no markdown fences.
-    2. "score" is an integer from 1 to 100: 1 = strongly bearish for the price, 50 = neutral or unclear, \
-    100 = strongly bullish. Use the full range only for overwhelming evidence.
-    3. "confidence" is 0.0–1.0: how sure you are given the quality and amount of evidence. Little or stale \
-    evidence means low confidence — never guess confidently.
+    2. "score" is an integer from 1 to 100 for the direction of the price over the holding period. Anchors: \
+    50 = no edge, evidence balanced or missing; 60 / 40 = slight lean (some support, real counterpoints); \
+    70 / 30 = clear lean — most evidence points one way, as in a typical tradable setup; 80 / 20 = strong — \
+    several independent confirmations, few counterpoints; 90+ / 10− = exceptional and rare. Score where the \
+    evidence points. Do NOT pull the score toward 50 because you are unsure — express doubt only in "confidence".
+    3. "confidence" is 0.0–1.0 for the quality and amount of evidence behind the score: 0.2 = thin or stale, \
+    0.5 = adequate, 0.7 = good (several consistent sources or indicators), 0.9 = very strong. It decides how much \
+    this stage counts in the total. Never guess confidently.
     4. Every reason must cite evidence: feature IDs exactly as given in the feature packs (e.g. "D.RSI14"), \
     or source IDs ("src:1", "src:2" …) that you list in "sources". Reasons without valid evidence are discarded.
     5. Never invent numbers, prices, dates, quotes or URLs. Use only numbers from the feature packs or from \
@@ -115,7 +122,7 @@ nonisolated enum Prompts {
     """
 
     static func user(spec: StageSpec, instrument: Instrument, profile: HoldingProfile, lastPrice: Double?,
-                     packs: [Timeframe: String], priorStages: [StageResult], today: Date) -> String {
+                     packs: [Timeframe: String], priorStages: [StageResult], today: Date, canShort: Bool = true) -> String {
         var lines: [String] = []
         lines.append("STAGE \(spec.id) — \(spec.name)")
         lines.append("Product: \(instrument.symbol) (\(instrument.name)) · \(instrument.kind.title) · \(instrument.exchange) · quoted in \(instrument.currency)")
@@ -123,6 +130,9 @@ nonisolated enum Prompts {
         if let lastPrice { lines.append("Last price: \(lastPrice)") }
         lines.append("Holding profile: \(profile.title) (\(profile.subtitle))")
         lines.append("Today: \(today.formatted(.iso8601.year().month().day()))")
+        if spec.id == 10 && !canShort {
+            lines.append("Short trades: NOT possible for this product on this holding profile (Indian cash shares cannot be held short overnight). Use \"long\" or \"none\" only.")
+        }
         lines.append("")
         lines.append("TASK: \(spec.task)")
         for tf in spec.packs {
