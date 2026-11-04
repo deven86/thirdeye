@@ -25,7 +25,7 @@ nonisolated struct KeychainStore: Sendable {
     let service: String
     let synchronizable: Bool
 
-    init(service: String = "com.jondhale.score1000.secrets", synchronizable: Bool = true) {
+    init(service: String = "com.jondhale.thirdeye.secrets", synchronizable: Bool = true) {
         self.service = service
         self.synchronizable = synchronizable
     }
@@ -52,7 +52,7 @@ nonisolated struct KeychainStore: Sendable {
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked,
             kSecValueData as String: data,
         ]
-        attributes[kSecAttrLabel as String] = "SCORE1000 \(account)"
+        attributes[kSecAttrLabel as String] = "Third Eye \(account)"
         let status = SecItemAdd(attributes as CFDictionary, nil)
         guard status == errSecSuccess else { throw KeychainError.unexpectedStatus(status) }
     }

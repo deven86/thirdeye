@@ -12,8 +12,8 @@
     <string>__TEAM_ID__</string>
     <key>provisioningProfiles</key>
     <dict>
-        <key>com.jondhale.score1000</key>
-        <string>match AppStore com.jondhale.score1000</string>
+        <key>com.jondhale.thirdeye</key>
+        <string>match AppStore com.jondhale.thirdeye</string>
     </dict>
     <key>manageAppVersionAndBuildNumber</key>
     <false/>

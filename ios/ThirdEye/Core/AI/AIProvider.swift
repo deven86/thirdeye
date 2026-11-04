@@ -136,7 +136,7 @@ nonisolated enum ProviderHTTP {
     static let session: URLSession = {
         let config = URLSessionConfiguration.ephemeral // no disk cache of responses that carry keys
         config.timeoutIntervalForRequest = 20
-        config.httpAdditionalHeaders = ["User-Agent": "SCORE1000-iOS"]
+        config.httpAdditionalHeaders = ["User-Agent": "ThirdEye-iOS"]
         return URLSession(configuration: config)
     }()
 

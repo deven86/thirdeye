@@ -35,7 +35,7 @@ final class AppLock {
     func unlock() async {
         guard state != .authenticating else { return }
         state = .authenticating
-        let result = await Self.authenticate(reason: "Unlock SCORE1000")
+        let result = await Self.authenticate(reason: "Unlock Third Eye")
         switch result {
         case .success:
             state = .unlocked
@@ -75,7 +75,7 @@ final class AppLock {
         var error: NSError?
         // `.deviceOwnerAuthentication` = biometrics with device-passcode fallback.
         guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
-            return .failure(error?.localizedDescription ?? "Set a device passcode to use SCORE1000.")
+            return .failure(error?.localizedDescription ?? "Set a device passcode to use Third Eye.")
         }
         // Completion-handler API + explicit @Sendable closure: LocalAuthentication calls back on a
         // private queue, so the closure must not inherit MainActor isolation.

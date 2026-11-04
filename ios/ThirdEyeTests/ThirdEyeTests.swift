@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Score1000
+@testable import ThirdEye
 
 @Suite("Provider model-list parsing")
 struct ProviderParsingTests {
@@ -124,7 +124,7 @@ struct SettingsTests {
     }
 
     @Test func tierAssignmentsPersist() throws {
-        let suite = "score1000.tests.\(UUID().uuidString)"
+        let suite = "thirdeye.tests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
 
@@ -139,7 +139,7 @@ struct SettingsTests {
     }
 
     @Test func fillMissingTiersKeepsUserChoices() throws {
-        let suite = "score1000.tests.\(UUID().uuidString)"
+        let suite = "thirdeye.tests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
 

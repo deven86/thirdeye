@@ -55,8 +55,8 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild test \
-            -project ios/Score1000.xcodeproj \
-            -scheme Score1000 \
+            -project ios/ThirdEye.xcodeproj \
+            -scheme ThirdEye \
             -destination "id=${{ steps.sim.outputs.udid }}" \
             CODE_SIGNING_ALLOWED=NO \
             -resultBundlePath build/TestResults.xcresult \

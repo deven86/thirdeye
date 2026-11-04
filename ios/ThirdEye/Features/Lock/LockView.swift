@@ -15,7 +15,7 @@ struct LockView: View {
                     .frame(maxWidth: 260)
                     .accessibilityHidden(true)
                 VStack(spacing: 6) {
-                    Text("SCORE1000")
+                    Text("Third Eye")
                         .font(.largeTitle.weight(.bold))
                         .foregroundStyle(palette.textPrimary)
                     Text("Private market analysis")

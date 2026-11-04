@@ -1,4 +1,4 @@
-name: Score1000
+name: ThirdEye
 options:
   bundleIdPrefix: com.jondhale
   deploymentTarget:
@@ -19,21 +19,21 @@ settings:
     ENABLE_USER_SCRIPT_SANDBOXING: YES
 
 targets:
-  Score1000:
+  ThirdEye:
     type: application
     platform: iOS
     supportedDestinations: [iOS]
     sources:
-      - path: Score1000
+      - path: ThirdEye
     info:
-      path: Score1000/Info.plist
+      path: ThirdEye/Info.plist
       properties:
-        CFBundleDisplayName: SCORE1000
+        CFBundleDisplayName: Third Eye
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSRequiresIPhoneOS: true
         ITSAppUsesNonExemptEncryption: false
-        NSFaceIDUsageDescription: SCORE1000 uses Face ID to keep your trades, keys and analysis private.
+        NSFaceIDUsageDescription: Third Eye uses Face ID to keep your trades, keys and analysis private.
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
@@ -46,7 +46,7 @@ targets:
           - UIInterfaceOrientationLandscapeRight
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jondhale.score1000
+        PRODUCT_BUNDLE_IDENTIFIER: com.jondhale.thirdeye
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO
@@ -55,26 +55,26 @@ targets:
         Release:
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: "Apple Distribution"
-          PROVISIONING_PROFILE_SPECIFIER: "match AppStore com.jondhale.score1000"
+          PROVISIONING_PROFILE_SPECIFIER: "match AppStore com.jondhale.thirdeye"
 
-  Score1000Tests:
+  ThirdEyeTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - path: Score1000Tests
+      - path: ThirdEyeTests
     dependencies:
-      - target: Score1000
+      - target: ThirdEye
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jondhale.score1000.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.jondhale.thirdeye.tests
         GENERATE_INFOPLIST_FILE: YES
 
 schemes:
-  Score1000:
+  ThirdEye:
     build:
       targets:
-        Score1000: all
-        Score1000Tests: [test]
+        ThirdEye: all
+        ThirdEyeTests: [test]
     test:
       targets:
-        - Score1000Tests
+        - ThirdEyeTests

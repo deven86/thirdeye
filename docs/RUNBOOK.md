@@ -1,9 +1,9 @@
-# Runbook — getting SCORE1000 onto your iPhone and iPad
+# Runbook — getting Third Eye onto your iPhone and iPad
 
-SCORE1000 uses exactly the same build setup as VISION: same Apple Developer account, same App Store Connect API key, same GitHub account (`deven86`), signing stored encrypted on a `match-signing` branch of this repo, and uploads only when you press the button.
+Third Eye uses exactly the same build setup as VISION: same Apple Developer account, same App Store Connect API key, same GitHub account (`deven86`), signing stored encrypted on a `match-signing` branch of this repo, and uploads only when you press the button.
 
 ## 1. GitHub (2 minutes)
-1. Create a **private** repo `deven86/score1000` (empty — no README).
+1. Create a **private** repo `deven86/thirdeye` (empty — no README).
 2. In it: Settings → Secrets and variables → Actions → add the **same 4 secrets you used for VISION** (GitHub never shows secret values, so paste them again from where you saved them):
 
 | Secret | Value |
@@ -16,11 +16,11 @@ SCORE1000 uses exactly the same build setup as VISION: same Apple Developer acco
 If you no longer have the `.p8` file, create a new API key in App Store Connect → Users and Access → Integrations → App Store Connect API (App Manager role), and update VISION's secrets too.
 
 ## 2. App Store Connect (3 minutes)
-1. My Apps → **+** New App → iOS → name e.g. "SCORE1000" (if taken, "SCORE1000 Analyst"), bundle ID **com.jondhale.score1000** (appears after step 3.1 below registers it), SKU `score1000`.
+1. My Apps → **+** New App → iOS → name e.g. "Third Eye" (if taken, "Third Eye Analyst"), bundle ID **com.jondhale.thirdeye** (appears after step 3.1 below registers it), SKU `thirdeye`.
 2. TestFlight tab → Internal Testing → add yourself.
 
 ## 3. First build (in GitHub → Actions)
-1. **Signing setup** → Run workflow (once). Registers the App ID `com.jondhale.score1000`, turns on Data Protection, and stores the certificate + profile on the `match-signing` branch.
+1. **Signing setup** → Run workflow (once). Registers the App ID `com.jondhale.thirdeye`, turns on Data Protection, and stores the certificate + profile on the `match-signing` branch.
    - Apple allows only a few distribution certificates per account. If it fails with a "maximum number" error, revoke an unused one in Certificates, Identifiers & Profiles, or ask Claude to share VISION's certificate instead.
 2. Create the App Store Connect app record (step 2.1) now that the bundle ID exists.
 3. **iOS build & test** → Run workflow. Compiles and runs the unit tests (no secrets needed).

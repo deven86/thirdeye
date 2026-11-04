@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct Score1000App: App {
+struct ThirdEyeApp: App {
     @State private var settings = AppSettings()
     @State private var lock = AppLock()
     @State private var catalog = ModelCatalog()
@@ -55,10 +55,10 @@ struct PrivacyCover: View {
         ZStack {
             palette.background.ignoresSafeArea()
             VStack(spacing: 12) {
-                Image(systemName: "lock.shield")
+                Image(systemName: "eye")
                     .font(.system(size: 44, weight: .light))
                     .foregroundStyle(palette.accent)
-                Text("SCORE1000")
+                Text("Third Eye")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(palette.textPrimary)
             }

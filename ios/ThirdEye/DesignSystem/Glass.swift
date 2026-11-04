@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Liquid Glass rules for SCORE1000:
+// Liquid Glass rules for Third Eye:
 //  • System bars, tab bars, toolbars and sheets get glass automatically (Xcode 26 / iOS 26).
 //  • Custom glass only on floating controls — never behind numbers, tables or candles.
 //  • When Reduce Transparency is on, or the High Contrast theme is selected, fall back to solid surfaces.

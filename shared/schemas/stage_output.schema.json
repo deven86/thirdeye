@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://score1000.local/schemas/stage_output.schema.json",
+  "$id": "https://thirdeye.local/schemas/stage_output.schema.json",
   "title": "StageOutput",
   "description": "Output of one of the 10 analysis stages. Score scale: 1 = strongly bearish, 50 = neutral, 100 = strongly bullish.",
   "type": "object",

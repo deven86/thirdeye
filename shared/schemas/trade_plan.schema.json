@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://score1000.local/schemas/trade_plan.schema.json",
+  "$id": "https://thirdeye.local/schemas/trade_plan.schema.json",
   "title": "TradePlan",
   "description": "Trade plan produced by stage 10 and validated/normalised by code. Prices in the instrument's quote currency.",
   "type": "object",

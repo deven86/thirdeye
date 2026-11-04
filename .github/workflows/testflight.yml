@@ -20,7 +20,7 @@ jobs:
       TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-      APP_IDS: com.jondhale.score1000
+      APP_IDS: com.jondhale.thirdeye
     steps:
       - uses: actions/checkout@v5
 
@@ -68,11 +68,11 @@ jobs:
         run: |
           set +e
           xcodebuild archive \
-            -project ios/Score1000.xcodeproj \
-            -scheme Score1000 \
+            -project ios/ThirdEye.xcodeproj \
+            -scheme ThirdEye \
             -configuration Release \
             -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/Score1000.xcarchive" \
+            -archivePath "$RUNNER_TEMP/ThirdEye.xcarchive" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" > "$RUNNER_TEMP/archive.log" 2>&1
           status=$?
@@ -89,7 +89,7 @@ jobs:
           sed "s/__TEAM_ID__/$TEAM_ID/" ci/ExportOptions.plist > "$RUNNER_TEMP/ExportOptions.plist"
           set +e
           xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/Score1000.xcarchive" \
+            -archivePath "$RUNNER_TEMP/ThirdEye.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
             -exportPath "$RUNNER_TEMP/export" \
             -allowProvisioningUpdates \

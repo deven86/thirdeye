@@ -1,4 +1,4 @@
-# SCORE1000 signing, without a Mac (same pattern as VISION).
+# Third Eye signing, without a Mac (same pattern as VISION).
 #
 # The distribution certificate and App Store profile are created once by `signing_setup`
 # and stored ENCRYPTED in this repository on the `match-signing` branch (fastlane match).
@@ -10,7 +10,7 @@
 default_platform(:ios)
 
 TEAM_ID = ENV.fetch("TEAM_ID")
-APP_IDS = ENV.fetch("APP_IDS", "com.jondhale.score1000").split(",").map(&:strip)
+APP_IDS = ENV.fetch("APP_IDS", "com.jondhale.thirdeye").split(",").map(&:strip)
 
 def asc_api_key
   app_store_connect_api_key(
@@ -48,7 +48,7 @@ platform :ios do
       if bundle.nil?
         UI.message("Registering App ID #{identifier}")
         bundle = Spaceship::ConnectAPI::BundleId.create(
-          name: "SCORE1000 #{identifier.split('.').last}", identifier: identifier, platform: "IOS"
+          name: "Third Eye #{identifier.split('.').last}", identifier: identifier, platform: "IOS"
         )
       end
       # Data Protection: app files are encrypted by iOS while the device is locked.

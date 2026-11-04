@@ -1,4 +1,4 @@
-# SCORE1000
+# Third Eye
 
 Private AI market-scoring app for iPhone and iPad (personal use, internal TestFlight only). Not investment advice.
 
@@ -19,7 +19,7 @@ ci/             export options for TestFlight upload
 ## Develop locally (Mac)
 ```
 brew install xcodegen
-cd ios && xcodegen generate && open Score1000.xcodeproj
+cd ios && xcodegen generate && open ThirdEye.xcodeproj
 ```
 
 ## Milestones
