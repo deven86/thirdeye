@@ -151,11 +151,14 @@ nonisolated enum HotScreener {
         // Avoid chasing: penalise RSI beyond 75/25 and closes far (> 2.5 ATR) from the 20-day average.
         let stretch = direction == "long" ? max(rsi - 75, 0) : max(25 - rsi, 0)
         let closes = candles.map(\.close)
-        var extension = 0.0
+        var extended = 0.0   // ATRs from the 20-day average, in the trade's direction
         if let a = Indicators.atr(candles).last ?? nil, let m = Indicators.sma(closes, 20).last ?? nil, a > 0, let last = closes.last {
-            extension = (last - m) / a * (direction == "long" ? 1 : -1)
+            extended = (last - m) / a * (direction == "long" ? 1 : -1)
         }
-        let score = Double(abs(lean)) * 8 + adx * 0.6 + (relVol - 1) * 4 - stretch * 2 - max(extension - 2.5, 0) * 6
+        let trendPoints = Double(abs(lean)) * 8 + adx * 0.6
+        let volumePoints = (relVol - 1) * 4
+        let chasePenalty = stretch * 2 + max(extended - 2.5, 0) * 6
+        let score = trendPoints + volumePoints - chasePenalty
         let keys = ["RSI14", "MACD", "ADX14", "SMA50", "SMA200", "CROSS50_200", "RANGE.POS", "ROC20", "RELVOL20", "STRUCTURE"]
         let parts = keys.compactMap { k in feature(k).map { "\(k): \($0.display)" } }
 
@@ -394,17 +397,19 @@ nonisolated enum HotPrompts {
     static let system = "You shortlist trade candidates for a deeper analysis, using only the computed chart summaries given. Output only JSON."
 
     static func user(_ rows: [ScreenRow], count: Int, profile: HoldingProfile, market: HotMarket, regime: String?) -> String {
-        var lines = [
-            "Holding profile: \(profile.title) (\(profile.subtitle)). Market: \(market.title).",
-            "Market context: \(regime ?? "not available")",
-            "",
-            "Pick the \(count) best candidates for a full 10-stage analysis. Prefer clean trends or setups with room to the next level, "
-                + "a direction that fits the market context (or clear relative strength for longs / weakness for shorts), and moves that are "
-                + "not stretched far from the 20-day average. Avoid erratic charts and one-candle spikes. Use each symbol exactly as written. "
-                + "Each reason under 20 words.",
-            "",
-            "Candidates (direction from the chart screen; RS = 20-day return minus the list's median, in points):",
-        ]
+        let instructions = """
+        Pick the \(count) best candidates for a full 10-stage analysis. Prefer clean trends or setups with room to the next level, \
+        a direction that fits the market context (or clear relative strength for longs / weakness for shorts), and moves that are \
+        not stretched far from the 20-day average. Avoid erratic charts and one-candle spikes. Use each symbol exactly as written. \
+        Each reason under 20 words.
+        """
+        var lines: [String] = []
+        lines.append("Holding profile: \(profile.title) (\(profile.subtitle)). Market: \(market.title).")
+        lines.append("Market context: \(regime ?? "not available")")
+        lines.append("")
+        lines.append(instructions)
+        lines.append("")
+        lines.append("Candidates (direction from the chart screen; RS = 20-day return minus the list's median, in points):")
         for r in rows {
             let rs = r.relativeStrength.map { String(format: "%+.1f", $0) } ?? "n/a"
             lines.append("- \(r.instrument.symbol) [\(r.direction) · score \(Int(r.codeScore.rounded())) · RS \(rs)] \(r.trend ?? "") · \(r.summary)")
