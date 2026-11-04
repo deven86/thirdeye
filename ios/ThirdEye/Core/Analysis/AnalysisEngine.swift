@@ -280,7 +280,7 @@ final class AnalysisEngine {
 
     // MARK: - Stage reuse
 
-    static let reusableStageIDs: [Int] = [1, 2, 3, 4, 7, 8]
+    nonisolated static let reusableStageIDs: [Int] = [1, 2, 3, 4, 7, 8]
 
     /// Completed stages from the newest analysis of the same product and profile within `hours`, made with the
     /// same prompts. Never chains (a reused stage is not reused again) and counts no cost.
