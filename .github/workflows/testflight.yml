@@ -13,6 +13,10 @@ on:
         default: 'macos-15-intel'
         type: choice
         options: ['macos-15-intel', 'macos-26', 'macos-15', 'macos-26-intel']
+      push:
+        description: 'Include push notifications (needs Push + Time Sensitive ticked on the App ID and signing refreshed)'
+        type: boolean
+        default: true
 
 jobs:
   upload:
@@ -44,7 +48,13 @@ jobs:
           command -v fastlane >/dev/null || sudo gem install fastlane --no-document
 
       - name: Generate Xcode project
-        run: cd ios && xcodegen generate
+        run: |
+          if [ "${{ inputs.push }}" = "false" ]; then
+            # Build without the push entitlements (the App ID/profile don't have them yet).
+            sed -i '' -e '/aps-environment:/d' -e '/usernotifications.time-sensitive:/d' ios/project.yml
+            echo "::notice title=push::Built WITHOUT push notifications"
+          fi
+          cd ios && xcodegen generate
 
       - name: Write App Store Connect API key (temporary, runner only)
         run: |
