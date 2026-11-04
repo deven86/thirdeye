@@ -1,0 +1,34 @@
+name: Data probe
+
+# Linux-only (cheap minutes). Inspects public market-data files so the app's parsers match reality.
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Upstox instrument files
+        run: |
+          for ex in NSE BSE MCX; do
+            curl -sS -o $ex.json.gz https://assets.upstox.com/market-quote/instruments/exchange/$ex.json.gz
+            echo "== $ex: gz $(stat -c%s $ex.json.gz) bytes, json $(gunzip -c $ex.json.gz | wc -c) bytes"
+            gunzip -c $ex.json.gz | python3 -c '
+          import json,sys,collections
+          d=json.load(sys.stdin)
+          print("records",len(d))
+          c=collections.Counter((x.get("segment"),x.get("instrument_type")) for x in d)
+          for k,v in c.most_common(40): print("  ",k,v)
+          seen=set()
+          for x in d:
+              k=(x.get("segment"),x.get("instrument_type"))
+              if k in seen: continue
+              seen.add(k); print("  SAMPLE",json.dumps(x)[:600])
+          keys=collections.Counter(k for x in d for k in x.keys()); print("  KEYS",dict(keys))
+          '
+          done
+      - name: Binance public klines
+        run: |
+          curl -sS "https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=2"; echo
+          curl -sS "https://data-api.binance.vision/api/v3/exchangeInfo?permissions=SPOT" | python3 -c 'import json,sys; d=json.load(sys.stdin); s=[x for x in d["symbols"] if x["status"]=="TRADING"]; print("trading symbols",len(s)); print(json.dumps(s[0])[:400])'
