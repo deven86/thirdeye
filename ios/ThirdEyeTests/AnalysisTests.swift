@@ -223,7 +223,8 @@ struct ScoringTests {
         let e = Scoring.evaluate(stages: stages, plan: plan("short"), lastCandleAge: 60, profile: .swing, instrument: crypto)
         #expect(e.composite == 322)
         #expect(e.verdict == .sell)
-        #expect(e.checks.allSatisfy(\.passed), "\(e.checks.filter { !$0.passed })")
+        let failed = e.checks.filter { !$0.passed }
+        #expect(failed.isEmpty, "\(failed)")
         #expect(abs(e.consensus.evidence - 0.612) < 1e-9)
         #expect(abs(e.consensus.support - 0.97) < 1e-9)
         #expect(e.consensus.opposition == 0)
