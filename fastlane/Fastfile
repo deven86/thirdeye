@@ -76,6 +76,26 @@ platform :ios do
     run_match(readonly: false, force: ENV["MATCH_FORCE"] == "true")
   end
 
+  desc "Enable Data Protection + iCloud on the App ID (prints the full error if Apple rejects it)"
+  lane :enable_capabilities do
+    asc_api_key
+    APP_IDS.each do |identifier|
+      bundle = Spaceship::ConnectAPI::BundleId.find(identifier)
+      [
+        ["DATA_PROTECTION", [{ key: "DATA_PROTECTION_PERMISSION_LEVEL", options: [{ key: "COMPLETE_PROTECTION" }] }]],
+        ["ICLOUD", [{ key: "ICLOUD_VERSION", options: [{ key: "XCODE_6" }] }]],
+      ].each do |type, settings|
+        begin
+          bundle.update_capability(type, enabled: true, settings: settings)
+          UI.important("PORTAL #{identifier}: enabled #{type}")
+        rescue => e
+          UI.important("PORTAL #{identifier}: FAILED #{type}: #{e.class}: #{e.message}")
+        end
+      end
+      UI.important("PORTAL #{identifier}: now #{bundle.get_capabilities.map(&:capability_type).sort.join(', ')}")
+    end
+  end
+
   desc "Read-only: report the App ID's capabilities"
   lane :portal_check do
     asc_api_key
