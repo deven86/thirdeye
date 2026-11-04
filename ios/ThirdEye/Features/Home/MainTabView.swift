@@ -12,12 +12,7 @@ struct MainTabView: View {
                 NavigationStack { HomeView() }
             }
             Tab("Markets", systemImage: "chart.line.uptrend.xyaxis", value: AppTab.markets) {
-                NavigationStack {
-                    ComingSoonView(title: "Markets",
-                                   systemImage: "magnifyingglass",
-                                   milestone: "M2",
-                                   detail: "Search every NSE, BSE, F&O, MCX, US, forex, metals and crypto product, with live candlestick charts.")
-                }
+                NavigationStack { MarketsView() }
             }
             Tab("Trades", systemImage: "list.bullet.rectangle", value: AppTab.trades) {
                 NavigationStack {

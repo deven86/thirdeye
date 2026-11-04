@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: transparent; overflow: hidden;
+               -webkit-user-select: none; -webkit-touch-callout: none; }
+  #chart { position: absolute; inset: 0; }
+</style>
+<!-- TradingView Lightweight Charts™ v5.2.1, Apache-2.0. Copyright (c) 2025 TradingView, Inc. https://www.tradingview.com/ -->
+<script src="lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+<div id="chart"></div>
+<script>
+(function () {
+  const LWC = window.LightweightCharts;
+  const el = document.getElementById('chart');
+  let chart = null, candles = null, volume = null;
+  let theme = { background: '#FFFFFF', text: '#5B6573', grid: '#EEF0F3', up: '#2E9E6B', down: '#D9534F', border: '#E3E6EA' };
+
+  function post(msg) {
+    try { window.webkit.messageHandlers.thirdEye.postMessage(msg); } catch (e) {}
+  }
+
+  function build() {
+    if (chart) chart.remove();
+    chart = LWC.createChart(el, {
+      autoSize: true,
+      layout: { background: { color: theme.background }, textColor: theme.text, fontSize: 11, attributionLogo: true },
+      grid: { vertLines: { color: theme.grid }, horzLines: { color: theme.grid } },
+      rightPriceScale: { borderColor: theme.border },
+      timeScale: { borderColor: theme.border, timeVisible: true, secondsVisible: false, rightOffset: 4 },
+      crosshair: { mode: 0 },
+      handleScale: { axisPressedMouseMove: true, pinch: true, mouseWheel: true },
+      handleScroll: { horzTouchDrag: true, vertTouchDrag: false }
+    });
+    candles = chart.addSeries(LWC.CandlestickSeries, {
+      upColor: theme.up, downColor: theme.down, borderVisible: false,
+      wickUpColor: theme.up, wickDownColor: theme.down
+    });
+    volume = chart.addSeries(LWC.HistogramSeries, { priceFormat: { type: 'volume' }, priceScaleId: '' });
+    volume.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+    chart.subscribeCrosshairMove(function (p) {
+      if (!p || !p.time || !p.seriesData) { post({ type: 'crosshair', bar: null }); return; }
+      const bar = p.seriesData.get(candles);
+      post({ type: 'crosshair', bar: bar ? { time: p.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close } : null });
+    });
+  }
+
+  window.thirdEye = {
+    setTheme: function (t) { theme = Object.assign(theme, t); build(); post({ type: 'ready' }); },
+    // bars: [{time (seconds, already shifted to display timezone), open, high, low, close, volume}]
+    setData: function (bars, precision, fit) {
+      if (!chart) build();
+      const minMove = Math.pow(10, -precision);
+      candles.applyOptions({ priceFormat: { type: 'price', precision: precision, minMove: minMove } });
+      candles.setData(bars.map(function (b) { return { time: b.time, open: b.open, high: b.high, low: b.low, close: b.close }; }));
+      volume.setData(bars.map(function (b) {
+        return { time: b.time, value: b.volume, color: (b.close >= b.open ? theme.up : theme.down) + '55' };
+      }));
+      if (fit) {
+        const n = bars.length;
+        if (n > 120) chart.timeScale().setVisibleLogicalRange({ from: n - 120, to: n + 4 });
+        else chart.timeScale().fitContent();
+      }
+    },
+    clear: function () { if (candles) { candles.setData([]); volume.setData([]); } }
+  };
+
+  build();
+  post({ type: 'ready' });
+})();
+</script>
+</body>
+</html>

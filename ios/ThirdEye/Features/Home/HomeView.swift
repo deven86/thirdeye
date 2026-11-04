@@ -4,6 +4,7 @@ struct HomeView: View {
     @Environment(\.palette) private var palette
     @Environment(AppSettings.self) private var settings
     @Environment(ModelCatalog.self) private var catalog
+    @Environment(MarketStore.self) private var market
     @State private var demoScore = 712
 
     private var connectedCount: Int {
@@ -48,7 +49,13 @@ struct HomeView: View {
                     SetupRow(done: settings.tierAssignments.count == ModelTier.allCases.count,
                              title: "Choose Fast / Balanced / Deep models",
                              detail: "\(settings.tierAssignments.count) of 3 tiers set")
-                    SetupRow(done: false, title: "Connect market data", detail: "Arrives in M2 with the backend server")
+                    SetupRow(done: market.upstoxLoggedIn,
+                             title: "Connect Indian markets (Upstox)",
+                             detail: market.upstoxLoggedIn ? "Logged in for today"
+                                : (market.hasUpstoxKeys ? "Log in today: Settings → Market Data" : "Settings → Market Data"))
+                    SetupRow(done: market.hasTwelveDataKey,
+                             title: "Connect US stocks, forex & gold",
+                             detail: market.hasTwelveDataKey ? "Twelve Data connected" : "Settings → Market Data")
                 }
                 .dataCard()
             }

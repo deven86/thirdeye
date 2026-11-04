@@ -5,6 +5,7 @@ struct ThirdEyeApp: App {
     @State private var settings = AppSettings()
     @State private var lock = AppLock()
     @State private var catalog = ModelCatalog()
+    @State private var market = MarketStore()
 
     var body: some Scene {
         WindowGroup {
@@ -14,6 +15,7 @@ struct ThirdEyeApp: App {
             .environment(settings)
             .environment(lock)
             .environment(catalog)
+            .environment(market)
         }
     }
 }

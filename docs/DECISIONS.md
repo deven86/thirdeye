@@ -12,3 +12,12 @@ Each entry: date · decision · why · cost/risk.
 6. **CI/CD copies VISION's proven pipeline.** `macos-15-intel` runner with Xcode 26; fastlane match stores the encrypted certificate/profile on this repo's `match-signing` branch; the match password is derived from the ASC key secret, so only 4 secrets are needed; TestFlight upload is manual (type `UPLOAD`). Build-and-test runs only by hand or on PRs because private-repo macOS minutes are limited and shared with VISION. Bundle ID `com.jondhale.thirdeye` follows VISION's naming.
 7. **App lock uses `.deviceOwnerAuthentication`** (Face ID with passcode fallback), re-locks after 30 s in the background, and shows a privacy cover whenever the scene is not active.
 8. **Name: Third Eye** (working name in the spec was SCORE1000). Display name "Third Eye", bundle ID `com.jondhale.thirdeye`, repo `deven86/thirdeye`, Xcode target `ThirdEye`. The score itself is still out of 1000.
+
+## M2 — Markets, phone-first (2026-11-04)
+
+9. **Phone-first: no backend until Milestone 6.** Data, charts and (later) AI analysis run on the iPhone. Only background monitoring and alerts need an always-on machine; that arrives in M6 (user's computer or a free cloud function).
+10. **Data sources:** Upstox (India: NSE, BSE, F&O, MCX, currency derivatives) with on-device OAuth — the redirect `https://127.0.0.1/thirdeye` is intercepted in a non-persistent WKWebView, the code is exchanged on device, the token stays in this device's Keychain and expires ~03:30 IST next day. Twelve Data (US stocks/ETFs, forex, metals; key in synced Keychain). Binance public market data via `data-api.binance.vision` (no key).
+11. **Instrument lists** are downloaded on device (Upstox daily ≈3 MB gz; others weekly), cached LZFSE-compressed in Application Support with complete file protection, excluded from backup. Debt instruments are excluded. Formats were verified against the live files with the Linux `Data probe` workflow.
+12. **Charts:** TradingView Lightweight Charts v5.2.1 bundled locally (no CDN), Apache-2.0, attribution logo kept and credited in Disclaimers. Times shifted to IST for Indian instruments.
+13. **Live refresh while a chart is visible:** 10 s (1m) to 10 min (1W/1M), stopped when the app leaves the foreground. Upstox WebSocket streaming is deferred; polling stays well inside rate limits.
+14. **Watchlist is local** in M2; it moves to iCloud sync with SwiftData later.
