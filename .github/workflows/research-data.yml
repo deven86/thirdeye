@@ -1,0 +1,50 @@
+name: Research data
+
+# Linux-only. Downloads public Binance daily candles for the current top-volume USDT pairs so the
+# scoring and edge maths can be prototyped and checked on real data (artifact: research-data).
+on:
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Top USDT pairs, daily candles, listing info
+        run: |
+          mkdir -p out/klines
+          curl -sS --retry 3 "https://data-api.binance.vision/api/v3/ticker/24hr" -o out/ticker24h.json
+          python3 - <<'PY'
+          import json, urllib.request, time
+          rows = json.load(open("out/ticker24h.json"))
+          usdt = [r for r in rows if r["symbol"].endswith("USDT")]
+          usdt.sort(key=lambda r: float(r["quoteVolume"]), reverse=True)
+          top = usdt[:60]
+          json.dump([{k: r[k] for k in ("symbol", "quoteVolume", "priceChangePercent", "lastPrice", "count")} for r in top],
+                    open("out/top60.json", "w"), indent=1)
+          for r in top:
+              s = r["symbol"]
+              url = f"https://data-api.binance.vision/api/v3/klines?symbol={s}&interval=1d&limit=1000"
+              for attempt in range(3):
+                  try:
+                      data = urllib.request.urlopen(url, timeout=30).read()
+                      break
+                  except Exception as e:
+                      print("retry", s, e); time.sleep(2)
+              open(f"out/klines/{s}.json", "wb").write(data)
+              k = json.loads(data)
+              first = time.strftime("%Y-%m-%d", time.gmtime(k[0][0] / 1000)) if k else "-"
+              print(f"{s:14s} vol {float(r['quoteVolume'])/1e6:10.1f}M  bars {len(k):5d}  first {first}  24h {r['priceChangePercent']}%")
+              time.sleep(0.15)
+          syms = ",".join(f'"{r["symbol"]}"' for r in top[:60])
+          info = urllib.request.urlopen(f'https://data-api.binance.vision/api/v3/exchangeInfo?symbols=[{syms}]', timeout=30).read()
+          open("out/exchangeInfo.json", "wb").write(info)
+          d = json.loads(info)
+          for x in d.get("symbols", []):
+              print(x["symbol"], x["status"], x.get("permissionSets", [])[:1], x.get("baseAsset"))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-data
+          path: out
+          retention-days: 7
