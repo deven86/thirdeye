@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Environment(ModelCatalog.self) private var catalog
     @Environment(AppLock.self) private var lock
     @Environment(MarketStore.self) private var market
+    @Environment(MonitorStore.self) private var monitor
 
     var body: some View {
         @Bindable var settings = settings
@@ -38,6 +39,15 @@ struct SettingsView: View {
                         Text(market.upstoxLoggedIn || market.hasTwelveDataKey ? "Connected" : "Crypto only")
                     } label: {
                         Label("Market Data", systemImage: "chart.bar.xaxis")
+                    }
+                }
+                NavigationLink {
+                    AlertsSettingsView()
+                } label: {
+                    LabeledContent {
+                        Text(monitor.isPaired ? (monitor.isOnline ? "PC online" : "PC offline") : "Not set up")
+                    } label: {
+                        Label("Alerts (Windows PC)", systemImage: "bell.badge")
                     }
                 }
             }

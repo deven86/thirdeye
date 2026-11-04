@@ -107,6 +107,19 @@ final class MarketStore {
         refreshCredentialStatus()
     }
 
+    /// For the Windows monitor (sent over Tailscale only after pairing): the Twelve Data key and today's
+    /// Upstox token, if they exist.
+    func monitorCredentials() -> (twelveDataKey: String?, upstoxToken: String?, upstoxIssued: Date?) {
+        let key = try? syncedKeychain.get(Account.twelveDataKey.rawValue)
+        var token: String?, issued: Date?
+        if let stored = try? deviceKeychain.get(Account.upstoxToken.rawValue), let decoded = Self.decodeToken(stored),
+           UpstoxAuth.expiry(issuedAt: decoded.issued) > Date() {
+            token = decoded.token
+            issued = decoded.issued
+        }
+        return (key ?? nil, token, issued)
+    }
+
     nonisolated static func encodeToken(_ token: String, issued: Date, user: String?) -> String {
         "\(Int(issued.timeIntervalSince1970))|\(user ?? "")|\(token)"
     }

@@ -2,9 +2,16 @@ import SwiftUI
 
 /// iPhone: tab bar (gets Liquid Glass automatically on iOS 26).
 /// iPad: the same tabs adapt to a sidebar via `.sidebarAdaptable`.
+/// A trade to show from a tapped notification.
+struct TradeLink: Identifiable, Hashable {
+    let id: UUID
+}
+
 struct MainTabView: View {
     enum AppTab: Hashable { case home, markets, portfolio, trades, settings }
     @State private var selection: AppTab = .home
+    @Environment(MonitorStore.self) private var monitor
+    @State private var alertPrices = PriceBook()
 
     var body: some View {
         TabView(selection: $selection) {
@@ -25,6 +32,10 @@ struct MainTabView: View {
             }
         }
         .tabViewStyle(.sidebarAdaptable)
+        .sheet(item: Binding(get: { monitor.openTradeID.map(TradeLink.init) },
+                             set: { monitor.openTradeID = $0?.id })) { link in
+            NavigationStack { TradeDetailView(tradeID: link.id, prices: alertPrices) }
+        }
     }
 }
 

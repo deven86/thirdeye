@@ -9,6 +9,7 @@ struct HomeView: View {
     @Environment(TradeStore.self) private var trades
     @State private var prices = PriceBook()
     @Environment(HotScanStore.self) private var hotScans
+    @Environment(MonitorStore.self) private var monitor
 
     private var hotSubtitle: String {
         guard let last = hotScans.scans.first else {
@@ -26,9 +27,27 @@ struct HomeView: View {
         AIProviderKind.allCases.filter { catalog.hasKey[$0] == true }.count
     }
 
+    private var monitorOfflineText: String {
+        if let s = monitor.status, s.lastLoopAt > .distantPast {
+            return "PC monitor offline since \(s.lastLoopAt.formatted(date: .omitted, time: .shortened)) — alerts paused"
+        }
+        return "Can't reach your PC monitor — alerts may be paused"
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                if monitor.isPaired, monitor.lastStatusAt != nil, !monitor.isOnline {
+                    NavigationLink { AlertsSettingsView() } label: {
+                        Label(monitorOfflineText, systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(palette.warning)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .floatingGlass(in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
                 if settings.paperMode {
                     Label("Paper mode — no real money", systemImage: "doc.text")
                         .font(.footnote.weight(.semibold))

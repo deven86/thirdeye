@@ -2,6 +2,8 @@ import SwiftUI
 
 @main
 struct ThirdEyeApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @State private var monitor = MonitorStore.shared
     @State private var settings = AppSettings()
     @State private var lock = AppLock()
     @State private var catalog = ModelCatalog()
@@ -22,6 +24,7 @@ struct ThirdEyeApp: App {
             .environment(analyses)
             .environment(trades)
             .environment(hotScans)
+            .environment(monitor)
         }
     }
 }
@@ -31,6 +34,9 @@ struct ThirdEyeApp: App {
 struct RootView: View {
     @Environment(AppLock.self) private var lock
     @Environment(AppSettings.self) private var settings
+    @Environment(TradeStore.self) private var trades
+    @Environment(MarketStore.self) private var market
+    @Environment(MonitorStore.self) private var monitor
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -52,7 +58,15 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             lock.relockAfter = TimeInterval(settings.relockSeconds)
             lock.handleScenePhase(phase)
+            if phase == .active {
+                Task { await monitor.refreshAll(trades: trades.trades, market: market) }
+            }
         }
+        // Keep the PC monitor's watch list in step with every trade change (debounced).
+        .onChange(of: trades.trades) { _, all in monitor.scheduleSync(all) }
+        .onChange(of: market.upstoxTokenExpiry) { _, _ in Task { await monitor.syncCredentials(market: market) } }
+        .onChange(of: market.hasTwelveDataKey) { _, _ in Task { await monitor.syncCredentials(market: market) } }
+        .task { await monitor.refreshAll(trades: trades.trades, market: market) }
     }
 }
 
