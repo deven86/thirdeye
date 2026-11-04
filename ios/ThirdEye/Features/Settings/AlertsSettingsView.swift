@@ -72,7 +72,7 @@ struct AlertsSettingsView: View {
         var parts = [monitor.address]
         if let s = monitor.status {
             parts.append("watching \(s.watching)")
-            if s.lastLoopAt > .distantPast { parts.append("last check \(s.lastLoopAt.formatted(date: .omitted, time: .shortened))") }
+            if s.lastLoopAt.timeIntervalSince1970 > 0 { parts.append("last check \(s.lastLoopAt.formatted(date: .omitted, time: .shortened))") }
         }
         return parts.joined(separator: " · ")
     }
@@ -179,8 +179,8 @@ struct AlertsSettingsView: View {
                     Text(r.symbol).font(.callout.weight(.semibold))
                     Spacer()
                     VStack(alignment: .trailing, spacing: 1) {
-                        Text(r.lastPrice.map { $0.formatted(.number.precision(.significantDigits(2...8))) } ?? "—").font(.callout.monospacedDigit())
-                        Text(r.marketOpen ? (r.lastCheck.map { "checked \($0.formatted(date: .omitted, time: .shortened))" } ?? "waiting")
+                        Text(r.lastPrice.flatMap { $0 > 0 ? $0.formatted(.number.precision(.significantDigits(2...8))) : nil } ?? "—").font(.callout.monospacedDigit())
+                        Text(r.marketOpen ? (r.lastCheck.flatMap { $0.timeIntervalSince1970 > 0 ? "checked \($0.formatted(date: .omitted, time: .shortened))" : nil } ?? "waiting")
                                           : "market closed")
                             .font(.caption2).foregroundStyle(palette.textSecondary)
                     }

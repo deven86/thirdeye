@@ -45,7 +45,7 @@ struct HomeView: View {
     }
 
     private var monitorOfflineText: String {
-        if let s = monitor.status, s.lastLoopAt > .distantPast {
+        if let s = monitor.status, s.lastLoopAt.timeIntervalSince1970 > 0 {
             return "PC monitor offline since \(s.lastLoopAt.formatted(date: .omitted, time: .shortened)) — alerts paused"
         }
         return "Can't reach your PC monitor — alerts may be paused"
