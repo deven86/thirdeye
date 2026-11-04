@@ -8,6 +8,7 @@ struct ThirdEyeApp: App {
     @State private var market = MarketStore()
     @State private var analyses = AnalysisStore()
     @State private var trades = TradeStore()
+    @State private var hotScans = HotScanStore()
 
     var body: some Scene {
         WindowGroup {
@@ -20,6 +21,7 @@ struct ThirdEyeApp: App {
             .environment(market)
             .environment(analyses)
             .environment(trades)
+            .environment(hotScans)
         }
     }
 }

@@ -68,6 +68,34 @@ nonisolated struct BinanceClient: CandleSource {
         }
     }
 
+    /// Most-traded USDT pairs over 24 h (stablecoins and leveraged tokens excluded).
+    func topByVolume(limit: Int) async throws -> [Instrument] {
+        let (data, status) = try await MarketHTTP.data(for: URLRequest(url: Self.base.appending(path: "ticker/24hr")))
+        guard status == 200 else { throw MarketDataError.http(status, ProviderHTTP.errorMessage(from: data)) }
+        return try Self.parseTopByVolume(data, limit: limit)
+    }
+
+    static let stablecoins: Set<String> = ["USDC", "FDUSD", "TUSD", "DAI", "USDP", "BUSD", "EUR", "EURI", "AEUR", "USDE", "XUSD",
+                                           "PYUSD", "USD1", "RLUSD", "PAXG", "WBTC", "WBETH", "BFUSD"]
+
+    static func parseTopByVolume(_ data: Data, limit: Int) throws -> [Instrument] {
+        guard let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw MarketDataError.decoding("Binance 24h tickers")
+        }
+        let picked = rows.compactMap { r -> (String, String, Double)? in
+            guard let sym = r["symbol"] as? String, sym.hasSuffix("USDT"),
+                  let qv = (r["quoteVolume"] as? String).flatMap(Double.init) else { return nil }
+            let base = String(sym.dropLast(4))
+            if base.isEmpty || stablecoins.contains(base) { return nil }
+            if ["UP", "DOWN", "BULL", "BEAR"].contains(where: { base.hasSuffix($0) && base.count > $0.count + 1 }) { return nil }
+            return (sym, base, qv)
+        }
+        .sorted { $0.2 > $1.2 }
+        .prefix(limit)
+        return picked.map { Instrument(id: "binance:\($0.0)", provider: .binance, symbol: "\($0.1)/USDT", name: $0.1,
+                                       exchange: "Binance", segment: "CRYPTO", kind: .crypto, currency: "USDT") }
+    }
+
     /// `{"symbol":"BTCUSDT","price":"78570.01"}`
     func lastPrice(_ instrument: Instrument) async throws -> Double {
         var c = URLComponents(url: Self.base.appending(path: "ticker/price"), resolvingAgainstBaseURL: false)!

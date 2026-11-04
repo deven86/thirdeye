@@ -8,6 +8,14 @@ struct HomeView: View {
     @Environment(AnalysisStore.self) private var analyses
     @Environment(TradeStore.self) private var trades
     @State private var prices = PriceBook()
+    @Environment(HotScanStore.self) private var hotScans
+
+    private var hotSubtitle: String {
+        guard let last = hotScans.scans.first else { return "AI scans \(settings.hotMarket.title) and suggests the top 3" }
+        let hot = last.hotTrades.map(\.instrument.symbol)
+        return hot.isEmpty ? "Last scan \(last.startedAt.formatted(.relative(presentation: .named))): no hot trades"
+                           : "Last scan: \(hot.joined(separator: ", "))"
+    }
     @State private var demoScore = 712
 
     private var connectedCount: Int {
@@ -25,6 +33,22 @@ struct HomeView: View {
                         .padding(.vertical, 6)
                         .floatingGlass(in: Capsule())
                 }
+
+                NavigationLink {
+                    HotTradesView()
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "flame.fill").font(.title2).foregroundStyle(palette.warning)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Hot trades").font(.headline).foregroundStyle(palette.textPrimary)
+                            Text(hotSubtitle).font(.caption).foregroundStyle(palette.textSecondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").foregroundStyle(palette.textSecondary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .dataCard()
 
                 let active = trades.trades.filter { $0.status == .open || $0.status == .upcoming }
                 if !active.isEmpty {

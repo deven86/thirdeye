@@ -53,3 +53,9 @@ Each entry: date · decision · why · cost/risk.
 ## Portfolio (2026-11-04)
 
 34. **Portfolio tab** (paper / real): per-currency current value, open cost, unrealised, realised this month and all time, and **open risk** (what you lose if every current stop is hit; 0 once a stop protects the entry), with a warning above 6 % of capital. Allocation donut by product / type / market, realised equity curve, open positions. An approximate single ₹ total appears only when a live USD/INR rate is available, and shows the rate and time used; USDT counts as USD. No rate → no total (never guessed). Maths in `PortfolioMath`, unit-tested.
+
+## M7 — Hot trades (2026-11-04)
+
+35. **Three-step scan, run only on demand with a cost confirmation:** (1) code screens a market's list on daily technicals — free; (2) a Fast model shortlists 3 of the top 15 (falls back to the code ranking); (3) each gets the full 10-stage analysis, one at a time. ≈ 3 × analysis cost + ~$0.01.
+36. **Only picks whose full analysis ends in Buy/Sell are labelled HOT.** If none pass, the app says "No hot trades right now" instead of forcing picks.
+37. **Universes:** crypto = top 30 USDT pairs by 24 h volume (stablecoins and leveraged tokens excluded); US = 30 large caps; forex & metals = 12 pairs incl. XAU/USD, USD/INR; India = ~50 large NSE names (curated, not an official index; unmatched symbols skipped). Indian cash shares are long-only in swing scans (no overnight shorting). Twelve Data scans are paced at 8 requests/minute for the free plan.

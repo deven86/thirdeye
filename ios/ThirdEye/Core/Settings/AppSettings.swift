@@ -14,6 +14,8 @@ final class AppSettings {
         static let hideLockScreenPnL = "settings.hideLockScreenPnL"
         static let riskPercent = "settings.riskPercent"
         static let capital = "settings.capitalByCurrency"
+        static let hotMarket = "settings.hotMarket"
+        static let hotProfile = "settings.hotProfile"
     }
 
     private let defaults: UserDefaults
@@ -50,6 +52,15 @@ final class AppSettings {
         didSet { defaults.set(capital, forKey: Keys.capital) }
     }
 
+    /// Market and holding style for Hot trades.
+    var hotMarket: HotMarket {
+        didSet { defaults.set(hotMarket.rawValue, forKey: Keys.hotMarket) }
+    }
+
+    var hotProfile: HoldingProfile {
+        didSet { defaults.set(hotProfile.rawValue, forKey: Keys.hotProfile) }
+    }
+
     var tierAssignments: [ModelTier: ModelRef] {
         didSet { saveAssignments() }
     }
@@ -65,6 +76,8 @@ final class AppSettings {
         let risk = defaults.double(forKey: Keys.riskPercent)
         riskPercent = risk > 0 ? risk : 1
         capital = defaults.dictionary(forKey: Keys.capital) as? [String: Double] ?? [:]
+        hotMarket = HotMarket(rawValue: defaults.string(forKey: Keys.hotMarket) ?? "") ?? .crypto
+        hotProfile = HoldingProfile(rawValue: defaults.string(forKey: Keys.hotProfile) ?? "") ?? .swing
         if let data = defaults.data(forKey: Keys.tierAssignments),
            let decoded = try? JSONDecoder().decode([String: ModelRef].self, from: data) {
             var map: [ModelTier: ModelRef] = [:]

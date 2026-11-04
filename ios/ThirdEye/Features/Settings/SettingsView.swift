@@ -42,6 +42,20 @@ struct SettingsView: View {
                 }
             }
 
+            Section {
+                Picker(selection: $settings.hotMarket) {
+                    ForEach(HotMarket.allCases) { Text($0.title).tag($0) }
+                } label: { Label("Hot trades market", systemImage: "flame") }
+                Picker(selection: $settings.hotProfile) {
+                    ForEach(HoldingProfile.allCases.filter { $0 != .equal }) { Text($0.title).tag($0) }
+                } label: { Label("Hot trades style", systemImage: "clock") }
+                NavigationLink { HotTradesView() } label: { Label("Open Hot trades", systemImage: "arrow.right.circle") }
+            } header: {
+                Text("Hot trades")
+            } footer: {
+                Text("Scans run only when you tap “Find hot trades” and show the estimated cost first.")
+            }
+
             Section("Appearance") {
                 NavigationLink {
                     ThemePickerView()

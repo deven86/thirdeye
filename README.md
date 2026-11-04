@@ -29,5 +29,5 @@ cd ios && xcodegen generate && open ThirdEye.xcodeproj
 - [x] **M4 10-stage AI analysis** — Claude with web search, validated stage outputs, code-computed 0–1000 score, vetoes, trade plan with TP ladder, verifier, full report
 - [x] **M5 Trades** — upcoming trades, entries/exits, TP tracking, position sizing, P&L journal, paper/real mode, iCloud sync
 - [ ] M6 Monitoring + alerts
-- [ ] M7 AI Recommendations
+- [x] **M7 Hot trades** — code screen → AI shortlist → full analysis of top 3; HOT only when every check passes
 - [ ] M8 Calibration + hardening

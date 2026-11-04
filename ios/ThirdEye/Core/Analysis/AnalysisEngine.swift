@@ -73,6 +73,18 @@ final class AnalysisEngine {
         task = Task { await execute(instrument: instrument, profile: profile, context: context) }
     }
 
+    /// Runs to completion and returns the saved run (used by Hot trades). Honours task cancellation.
+    func runAndWait(instrument: Instrument, profile: HoldingProfile, context: Context) async -> AnalysisRun? {
+        guard !isRunning else { return nil }
+        stageStatus = Dictionary(uniqueKeysWithValues: StageSpec.all.map { ($0.id, .pending) })
+        runningCost = 0
+        run = AnalysisRun(id: UUID(), instrument: instrument, profile: profile, startedAt: Date(), finishedAt: nil,
+                          lastPrice: nil, stages: [], composite: nil, verdict: nil, vetoes: [], plan: nil,
+                          verifierNotes: [], totalCostUSD: 0, promptVersion: StageSpec.promptVersion, featurePackHash: "")
+        await execute(instrument: instrument, profile: profile, context: context)
+        return phase == .done ? run : nil
+    }
+
     func cancel() {
         task?.cancel()
         phase = .failed("Cancelled.")
