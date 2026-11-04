@@ -27,3 +27,4 @@ __pycache__/
 # OS
 .DS_Store
 ios/ThirdEye/Info.plist
+ios/ThirdEye/ThirdEye.entitlements
