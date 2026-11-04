@@ -25,7 +25,7 @@ nonisolated struct KeychainStore: Sendable {
     let service: String
     let synchronizable: Bool
 
-    init(service: String = "com.devendrajondhale.score1000.secrets", synchronizable: Bool = true) {
+    init(service: String = "com.jondhale.score1000.secrets", synchronizable: Bool = true) {
         self.service = service
         self.synchronizable = synchronizable
     }

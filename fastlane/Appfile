@@ -1,2 +1,0 @@
-app_identifier("com.devendrajondhale.score1000")
-team_id(ENV["APPLE_TEAM_ID"])

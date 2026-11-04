@@ -1,11 +1,8 @@
 name: iOS build & test
 
-# Compiles and runs unit tests on a simulator. Needs no secrets, so it works
-# before any Apple accounts are set up.
+# Compiles and runs unit tests on a simulator. Needs no secrets.
+# Private repo: Mac minutes are limited, so (like VISION) this runs only by hand or on a PR.
 on:
-  push:
-    branches: [main]
-    paths: ["ios/**", ".github/workflows/ios-ci.yml"]
   pull_request:
     paths: ["ios/**", ".github/workflows/ios-ci.yml"]
   workflow_dispatch:
@@ -16,17 +13,17 @@ concurrency:
 
 jobs:
   build-test:
-    runs-on: macos-26
+    runs-on: macos-15-intel
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Select newest Xcode 26
         run: |
-          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
-          echo "Using $XCODE"
-          sudo xcode-select -s "$XCODE"
-          xcodebuild -version
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$X" ]; then echo "::error title=xcode::No Xcode 26 installed on this runner image"; exit 1; fi
+          sudo xcode-select -s "$X/Contents/Developer"
+          echo "::notice title=selected::$(xcodebuild -version | tr '\n' ' ')"
 
       - name: Generate Xcode project
         run: |
@@ -45,7 +42,13 @@ jobs:
               for x in devs:
                   if x["name"].startswith("iPhone"): best=x["udid"]
           print(best or "")')
-          test -n "$UDID" || { echo "No iOS 26 iPhone simulator found"; xcrun simctl list devices available; exit 1; }
+          if [ -z "$UDID" ]; then
+            echo "::warning title=simulator::No iOS 26 iPhone simulator on this image; downloading the iOS platform"
+            xcodebuild -downloadPlatform iOS
+            RT=$(xcrun simctl list runtimes -j | python3 -c 'import json,sys; r=[x for x in json.load(sys.stdin)["runtimes"] if x["identifier"].find("iOS-26")>=0 and x["isAvailable"]]; print(r[-1]["identifier"] if r else "")')
+            test -n "$RT" || { echo "::error title=simulator::No iOS 26 runtime available"; exit 1; }
+            UDID=$(xcrun simctl create "CI iPhone" "iPhone 17" "$RT" 2>/dev/null || xcrun simctl create "CI iPhone" "iPhone 16" "$RT")
+          fi
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
 
       - name: Build and test
