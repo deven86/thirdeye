@@ -6,6 +6,13 @@ on:
   pull_request:
     paths: ["ios/**", ".github/workflows/ios-ci.yml"]
   workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Mac runner (switch to macos-26 if Intel Macs are not available)'
+        required: false
+        default: 'macos-15-intel'
+        type: choice
+        options: ['macos-15-intel', 'macos-26']
 
 concurrency:
   group: ios-ci-${{ github.ref }}
@@ -13,7 +20,7 @@ concurrency:
 
 jobs:
   build-test:
-    runs-on: macos-15-intel
+    runs-on: ${{ inputs.runner || 'macos-15-intel' }}
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5

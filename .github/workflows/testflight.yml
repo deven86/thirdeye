@@ -7,11 +7,17 @@ on:
       confirm:
         description: 'Type UPLOAD to send this build to TestFlight'
         required: true
+      runner:
+        description: 'Mac runner (switch to macos-26 if Intel Macs are not available)'
+        required: false
+        default: 'macos-15-intel'
+        type: choice
+        options: ['macos-15-intel', 'macos-26']
 
 jobs:
   upload:
     if: ${{ github.event.inputs.confirm == 'UPLOAD' }}
-    runs-on: macos-15-intel
+    runs-on: ${{ inputs.runner || 'macos-15-intel' }}
     timeout-minutes: 60
     environment: release        # add required reviewers to this environment in GitHub for a second approval
     permissions:
