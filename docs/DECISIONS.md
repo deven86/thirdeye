@@ -49,3 +49,7 @@ Each entry: date · decision · why · cost/risk.
 31. **Paper by default;** switching to real money needs Face ID. Each trade is stamped paper/real; journal stats are separate.
 32. **Sync:** trades are stored locally (complete file protection) and mirrored to iCloud key-value storage, one key per trade, newest `updatedAt` wins, deletions via tombstones. Chosen over CloudKit/SwiftData because it needs no container, schema or CloudKit console. Limit: ~1 MB total (hundreds of trades); analyses (large) stay on the device. The App ID capabilities (iCloud, Data Protection) must be ticked manually — Apple rejects capability changes made with an App Store Connect API key ("Unauthenticated").
 33. **Live prices** for trades use single-quote endpoints (Binance ticker, Twelve Data /price, Upstox v3 LTP with candle fallback — Upstox shape not yet verified live), refreshed every 30 s only while visible. Foreground hints only; background alerts are M6.
+
+## Portfolio (2026-11-04)
+
+34. **Portfolio tab** (paper / real): per-currency current value, open cost, unrealised, realised this month and all time, and **open risk** (what you lose if every current stop is hit; 0 once a stop protects the entry), with a warning above 6 % of capital. Allocation donut by product / type / market, realised equity curve, open positions. An approximate single ₹ total appears only when a live USD/INR rate is available, and shows the rate and time used; USDT counts as USD. No rate → no total (never guessed). Maths in `PortfolioMath`, unit-tested.

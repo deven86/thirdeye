@@ -3,7 +3,7 @@ import SwiftUI
 /// iPhone: tab bar (gets Liquid Glass automatically on iOS 26).
 /// iPad: the same tabs adapt to a sidebar via `.sidebarAdaptable`.
 struct MainTabView: View {
-    enum AppTab: Hashable { case home, markets, trades, settings }
+    enum AppTab: Hashable { case home, markets, portfolio, trades, settings }
     @State private var selection: AppTab = .home
 
     var body: some View {
@@ -13,6 +13,9 @@ struct MainTabView: View {
             }
             Tab("Markets", systemImage: "chart.line.uptrend.xyaxis", value: AppTab.markets) {
                 NavigationStack { MarketsView() }
+            }
+            Tab("Portfolio", systemImage: "chart.pie", value: AppTab.portfolio) {
+                NavigationStack { PortfolioView() }
             }
             Tab("Trades", systemImage: "list.bullet.rectangle", value: AppTab.trades) {
                 NavigationStack { TradesView() }
