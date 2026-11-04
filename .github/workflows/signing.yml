@@ -10,13 +10,19 @@ on:
         description: 'Regenerate profiles (needed after adding capabilities)'
         type: boolean
         default: false
+      runner:
+        description: 'Mac runner (switch if one type is not available)'
+        required: false
+        default: 'macos-15-intel'
+        type: choice
+        options: ['macos-15-intel', 'macos-26', 'macos-15', 'macos-26-intel']
 
 permissions:
   contents: write
 
 jobs:
   setup:
-    runs-on: macos-15-intel
+    runs-on: ${{ inputs.runner || 'macos-15-intel' }}
     timeout-minutes: 30
     env:
       TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

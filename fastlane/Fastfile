@@ -71,7 +71,8 @@ platform :ios do
       rescue => e
         UI.important("#{identifier}: could not enable iCloud automatically (#{e.message})")
       end
-      # Push Notifications are added in Milestone 6, followed by a forced re-run.
+      # Push Notifications + Time Sensitive Notifications (M6) are ticked by hand on the App ID — Apple refuses
+      # capability changes made with an API key — then this lane runs with force to regenerate the profile.
     end
     run_match(readonly: false, force: ENV["MATCH_FORCE"] == "true")
   end
