@@ -21,3 +21,11 @@ Each entry: date · decision · why · cost/risk.
 12. **Charts:** TradingView Lightweight Charts v5.2.1 bundled locally (no CDN), Apache-2.0, attribution logo kept and credited in Disclaimers. Times shifted to IST for Indian instruments.
 13. **Live refresh while a chart is visible:** 10 s (1m) to 10 min (1W/1M), stopped when the app leaves the foreground. Upstox WebSocket streaming is deferred; polling stays well inside rate limits.
 14. **Watchlist is local** in M2; it moves to iCloud sync with SwiftData later.
+
+## M3 — Feature engine (2026-11-04)
+
+15. **All indicators are computed on device in code** (`Core/Features`). The AI (M4) receives a compact feature pack keyed by stable IDs such as `D.RSI14` and must cite them; it never reads raw candles.
+16. **Indicators are verified against TA-Lib 0.8.3**, the industry reference, on a deterministic 300-bar series (golden tests in `FeatureEngineTests`): SMA, EMA, RSI, ATR, MACD, Bollinger, ADX/±DI match to ~1e-13. ATR, MACD and ADX use TA-Lib/Wilder seeding so values match from the first bar.
+17. **Patterns report their own track record** on the product being viewed (hit rate after 5 bars, sample size). A pattern only counts as a signal with ≥ 8 past occurrences and ≥ 55 % hit rate.
+18. **The "Technicals" lean (Bullish/Mixed/Bearish) is a code-computed count of signals**, clearly labelled as not the AI score.
+19. Fixed a chart bug from M2: a theme change could re-trigger the chart's "ready" message in a loop. The chart now reloads data explicitly after theme/locale changes.

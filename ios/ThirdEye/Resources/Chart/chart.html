@@ -17,7 +17,8 @@
 (function () {
   const LWC = window.LightweightCharts;
   const el = document.getElementById('chart');
-  let chart = null, candles = null, volume = null;
+  let chart = null, candles = null, volume = null, levelLines = [];
+  let locale = 'en-US', precision = 2;
   let theme = { background: '#FFFFFF', text: '#5B6573', grid: '#EEF0F3', up: '#2E9E6B', down: '#D9534F', border: '#E3E6EA' };
 
   function post(msg) {
@@ -33,6 +34,12 @@
       rightPriceScale: { borderColor: theme.border },
       timeScale: { borderColor: theme.border, timeVisible: true, secondsVisible: false, rightOffset: 4 },
       crosshair: { mode: 0 },
+      localization: {
+        locale: locale,
+        priceFormatter: function (p) {
+          return new Intl.NumberFormat(locale, { minimumFractionDigits: precision, maximumFractionDigits: precision }).format(p);
+        }
+      },
       handleScale: { axisPressedMouseMove: true, pinch: true, mouseWheel: true },
       handleScroll: { horzTouchDrag: true, vertTouchDrag: false }
     });
@@ -40,7 +47,10 @@
       upColor: theme.up, downColor: theme.down, borderVisible: false,
       wickUpColor: theme.up, wickDownColor: theme.down
     });
-    volume = chart.addSeries(LWC.HistogramSeries, { priceFormat: { type: 'volume' }, priceScaleId: '' });
+    volume = chart.addSeries(LWC.HistogramSeries, {
+      priceFormat: { type: 'volume' }, priceScaleId: '', lastValueVisible: false, priceLineVisible: false
+    });
+    levelLines = [];
     volume.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
     chart.subscribeCrosshairMove(function (p) {
       if (!p || !p.time || !p.seriesData) { post({ type: 'crosshair', bar: null }); return; }
@@ -50,10 +60,13 @@
   }
 
   window.thirdEye = {
-    setTheme: function (t) { theme = Object.assign(theme, t); build(); post({ type: 'ready' }); },
+    setTheme: function (t) { theme = Object.assign(theme, t); build(); },  // caller re-sends data
     // bars: [{time (seconds, already shifted to display timezone), open, high, low, close, volume}]
-    setData: function (bars, precision, fit) {
+    setLocale: function (loc) { if (loc !== locale) { locale = loc; build(); } },  // caller re-sends data
+    setData: function (bars, prec, fit) {
       if (!chart) build();
+      if (prec !== precision) { precision = prec; chart.applyOptions({ localization: { locale: locale, priceFormatter: function (p) {
+        return new Intl.NumberFormat(locale, { minimumFractionDigits: precision, maximumFractionDigits: precision }).format(p); } } }); }
       const minMove = Math.pow(10, -precision);
       candles.applyOptions({ priceFormat: { type: 'price', precision: precision, minMove: minMove } });
       candles.setData(bars.map(function (b) { return { time: b.time, open: b.open, high: b.high, low: b.low, close: b.close }; }));
@@ -65,6 +78,17 @@
         if (n > 120) chart.timeScale().setVisibleLogicalRange({ from: n - 120, to: n + 4 });
         else chart.timeScale().fitContent();
       }
+    },
+    // levels: [{price, title, kind: 'support'|'resistance'}]
+    setLevels: function (levels) {
+      if (!candles) return;
+      levelLines.forEach(function (l) { candles.removePriceLine(l); });
+      levelLines = levels.map(function (l) {
+        return candles.createPriceLine({
+          price: l.price, title: l.title, lineWidth: 1, lineStyle: 2, axisLabelVisible: true,
+          color: (l.kind === 'support' ? theme.up : theme.down) + 'AA'
+        });
+      });
     },
     clear: function () { if (candles) { candles.setData([]); volume.setData([]); } }
   };

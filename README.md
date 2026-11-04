@@ -25,7 +25,7 @@ cd ios && xcodegen generate && open ThirdEye.xcodeproj
 ## Milestones
 - [x] **M1 Foundation** — themes, Liquid Glass, Face ID lock, Keychain keys, live AI model listing, tier mapping, CI → TestFlight (VISION pipeline)
 - [x] **M2 Markets (phone-first)** — Upstox login, every NSE/BSE/F&O/MCX product, US/forex/gold, crypto, search, live candlestick charts, watchlist
-- [ ] M3 Feature engine
+- [x] **M3 Feature engine** — indicators verified against TA-Lib, support/resistance, patterns with their own hit rates, history phases, Technicals panel
 - [ ] M4 AI stages + scoring
 - [ ] M5 Trade plans, positions, journal
 - [ ] M6 Monitoring + alerts

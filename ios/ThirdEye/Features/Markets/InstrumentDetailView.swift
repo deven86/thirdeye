@@ -13,6 +13,7 @@ struct InstrumentDetailView: View {
     @State private var lastUpdate: Date?
     @State private var hovered: Candle?
     @State private var showLogin = false
+    @State private var snapshot: FeatureEngine.Snapshot?
 
     private var displayTimeZone: TimeZone {
         instrument.provider == .upstox ? TimeZone(identifier: "Asia/Kolkata")! : .current
@@ -38,6 +39,13 @@ struct InstrumentDetailView: View {
                 header
                 chartCard
                 TimeframePicker(selection: $timeframe)
+                if let snapshot {
+                    TechnicalsPanel(snapshot: snapshot)
+                } else if !candles.isEmpty {
+                    Text("Need at least \(FeatureEngine.minimumBars) bars for technicals.")
+                        .font(.caption)
+                        .foregroundStyle(palette.textSecondary)
+                }
                 detailsCard
                 AdaptiveButton(title: "Analyse with AI", systemImage: "sparkles", kind: .secondary) {}
                     .disabled(true)
@@ -72,6 +80,13 @@ struct InstrumentDetailView: View {
             }
         }
         .sheet(isPresented: $showLogin) { UpstoxLoginSheet() }
+        .task(id: candles.last.map { "\($0.time.timeIntervalSince1970)|\($0.close)|\(candles.count)|\(timeframe.rawValue)" } ?? "none") {
+            let bars = candles
+            let tf = timeframe
+            guard !bars.isEmpty else { snapshot = nil; return }
+            // Off the main thread: indicators over a few thousand bars take a few milliseconds.
+            snapshot = await Task.detached(priority: .userInitiated) { FeatureEngine.snapshot(bars, timeframe: tf) }.value
+        }
     }
 
     // MARK: Pieces
@@ -111,12 +126,24 @@ struct InstrumentDetailView: View {
         }
     }
 
+    /// Nearest two support and two resistance zones, drawn as dashed lines.
+    private var chartLevels: [ChartLevel] {
+        guard let zones = snapshot?.zones else { return [] }
+        let supports = zones.filter { $0.kind == .support }.prefix(2)
+        let resistances = zones.filter { $0.kind == .resistance }.prefix(2)
+        return (supports + resistances).map {
+            ChartLevel(price: $0.price, title: $0.kind == .support ? "S" : "R", isSupport: $0.kind == .support)
+        }
+    }
+
     private var chartCard: some View {
         ZStack {
             CandleChartView(candles: candles,
                             precision: precision,
                             displayTimeZone: displayTimeZone,
                             fitToken: "\(instrument.id)|\(timeframe.rawValue)",
+                            locale: instrument.currency == "INR" ? "en-IN" : "en-US",
+                            levels: chartLevels,
                             onCrosshair: { hovered = $0 })
                 .opacity(candles.isEmpty ? 0 : 1)
             if let error, candles.isEmpty {
@@ -186,6 +213,7 @@ struct InstrumentDetailView: View {
             loading = true
             candles = []
             hovered = nil
+            snapshot = nil
         }
         defer { loading = false }
         do {

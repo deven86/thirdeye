@@ -10,6 +10,10 @@ struct CandleChartView: UIViewRepresentable {
     let displayTimeZone: TimeZone
     /// Changes when the user switches instrument/timeframe, so the chart re-fits.
     let fitToken: String
+    /// Number-format locale for the price axis (en-IN gives lakh grouping for ₹ products).
+    var locale: String = "en-US"
+    /// Support/resistance lines drawn on the chart.
+    var levels: [ChartLevel] = []
     var onCrosshair: (Candle?) -> Void = { _ in }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -36,6 +40,8 @@ struct CandleChartView: UIViewRepresentable {
         c.theme = ChartTheme(palette: palette)
         c.payload = ChartPayload(candles: candles, precision: precision, timeZone: displayTimeZone)
         c.fitToken = fitToken
+        c.locale = locale
+        c.levels = levels
         c.flush()
     }
 
@@ -49,19 +55,26 @@ struct CandleChartView: UIViewRepresentable {
         var theme: ChartTheme?
         var payload: ChartPayload?
         var fitToken = ""
+        var locale = "en-US"
+        var levels: [ChartLevel] = []
         var onCrosshair: (Candle?) -> Void = { _ in }
         private var sentTheme: ChartTheme?
+        private var sentLocale: String?
         private var sentPayloadID: Int?
         private var sentFitToken: String?
+        private var sentLevels: [ChartLevel]?
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
             guard let body = message.body as? [String: Any], let type = body["type"] as? String else { return }
             switch type {
             case "ready":
+                // Sent once per page load. Everything is re-sent after a (re)load.
                 ready = true
                 sentTheme = nil
+                sentLocale = nil
                 sentPayloadID = nil
                 sentFitToken = nil
+                sentLevels = nil
                 flush()
             case "crosshair":
                 guard let bar = body["bar"] as? [String: Any],
@@ -80,9 +93,17 @@ struct CandleChartView: UIViewRepresentable {
 
         func flush() {
             guard ready, let web = webView else { return }
+            // Theme and locale rebuild the chart in JS, so data and levels must follow.
+            if locale != sentLocale {
+                sentLocale = locale
+                sentPayloadID = nil
+                sentLevels = nil
+                web.evaluateJavaScript("thirdEye.setLocale('\(locale)')")
+            }
             if let theme, theme != sentTheme {
                 sentTheme = theme
-                sentPayloadID = nil // theme rebuild clears series
+                sentPayloadID = nil
+                sentLevels = nil
                 web.evaluateJavaScript("thirdEye.setTheme(\(theme.json))")
             }
             if let payload, payload.id != sentPayloadID {
@@ -90,6 +111,12 @@ struct CandleChartView: UIViewRepresentable {
                 sentPayloadID = payload.id
                 sentFitToken = fitToken
                 web.evaluateJavaScript("thirdEye.setData(\(payload.json), \(payload.precision), \(fit))")
+                sentLevels = nil // price lines belong to the series; redraw after new data
+            }
+            if levels != sentLevels, payload != nil {
+                sentLevels = levels
+                let rows = levels.map { "{\"price\":\($0.price),\"title\":\"\($0.title)\",\"kind\":\"\($0.isSupport ? "support" : "resistance")\"}" }
+                web.evaluateJavaScript("thirdEye.setLevels([\(rows.joined(separator: ","))])")
             }
         }
     }
@@ -102,6 +129,12 @@ private final class WeakMessageProxy: NSObject, WKScriptMessageHandler {
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         target?.userContentController(controller, didReceive: message)
     }
+}
+
+struct ChartLevel: Equatable {
+    var price: Double
+    var title: String
+    var isSupport: Bool
 }
 
 struct ChartTheme: Equatable {
