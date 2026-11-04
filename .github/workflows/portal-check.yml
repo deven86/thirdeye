@@ -1,0 +1,27 @@
+name: Portal check
+
+# Read-only: lists the capabilities enabled on the App ID. Linux runner (cheap minutes).
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      APP_IDS: com.jondhale.thirdeye
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check capabilities
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          echo "${{ secrets.ASC_KEY_P8_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/keys/AuthKey.p8"
+          export ASC_KEY_PATH="$RUNNER_TEMP/keys/AuthKey.p8"
+          sudo gem install fastlane --no-document >/dev/null
+          fastlane portal_check 2>&1 | grep -E "PORTAL|error" | while IFS= read -r l; do echo "::notice title=portal::$l"; echo "$l"; done
+          rm -rf "$RUNNER_TEMP/keys"
