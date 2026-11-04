@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "updated": "2026-11-04",
+  "currency": "USD",
+  "unit": "per_1M_tokens",
+  "note": "Prices change often. Anthropic figures from Anthropic's official pricing page (Nov 2026). Others are from third-party trackers and must be verified. The app matches a model ID to the first pattern that is a prefix of it.",
+  "models": [
+    {"provider": "anthropic", "pattern": "claude-haiku-5-5", "input": 0.10, "output": 0.50, "verified": true},
+    {"provider": "anthropic", "pattern": "claude-sonnet-5-5", "input": 2.00, "output": 10.00, "verified": true},
+    {"provider": "anthropic", "pattern": "claude-opus-5-5", "input": 4.00, "output": 20.00, "verified": true},
+    {"provider": "openai", "pattern": "gpt-5-nano", "input": 0.05, "output": 0.40, "verified": false},
+    {"provider": "openai", "pattern": "gpt-5.4", "input": 2.50, "output": 15.00, "verified": false},
+    {"provider": "openai", "pattern": "gpt-5.5", "input": 5.00, "output": 30.00, "verified": false},
+    {"provider": "gemini", "pattern": "gemini-2.5-flash-lite", "input": 0.10, "output": 0.40, "verified": false},
+    {"provider": "gemini", "pattern": "gemini-3.1-pro", "input": 2.00, "output": 12.00, "verified": false}
+  ],
+  "web_search_per_1000": {"anthropic": 10.0, "gemini": 14.0, "openai": 10.0}
+}

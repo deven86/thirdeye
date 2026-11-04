@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://score1000.local/schemas/trade_plan.schema.json",
+  "title": "TradePlan",
+  "description": "Trade plan produced by stage 10 and validated/normalised by code. Prices in the instrument's quote currency.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["product_id", "side", "entry_zone", "stop_loss", "take_profits", "holding_badge", "max_holding_days", "rationale"],
+  "properties": {
+    "product_id": {"type": "string"},
+    "side": {"type": "string", "enum": ["long", "short"]},
+    "entry_zone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["low", "high"],
+      "properties": {"low": {"type": "number", "exclusiveMinimum": 0}, "high": {"type": "number", "exclusiveMinimum": 0}}
+    },
+    "stop_loss": {"type": "number", "exclusiveMinimum": 0},
+    "take_profits": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stage", "price", "book_percent"],
+        "properties": {
+          "stage": {"type": "integer", "minimum": 1, "maximum": 5},
+          "price": {"type": ["number", "null"], "description": "null = runner with trailing stop"},
+          "r_multiple": {"type": ["number", "null"]},
+          "book_percent": {"type": "number", "exclusiveMinimum": 0, "maximum": 100},
+          "then": {"type": "string"}
+        }
+      }
+    },
+    "holding_badge": {"type": "string", "enum": ["scalp", "intraday", "short_term", "swing", "positional", "long_term"]},
+    "max_holding_days": {"type": "integer", "minimum": 0},
+    "rationale": {"type": "string", "maxLength": 1200}
+  }
+}

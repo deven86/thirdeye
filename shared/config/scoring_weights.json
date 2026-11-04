@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "note": "Weights per holding profile for stages 1-10. Each profile must sum to 100. Composite C = 10 * sum(w_i * s_eff_i) / 100, where s_eff = 50 + confidence * (score - 50).",
+  "stages": ["news", "upcoming_events", "leadership_country", "monthly_history", "weekly_6m", "daily", "global_sector", "connected_products", "today_1w", "final"],
+  "profiles": {
+    "scalp_intraday": [8, 4, 0, 0, 2, 10, 4, 8, 24, 40],
+    "swing":          [10, 8, 3, 4, 10, 15, 8, 8, 14, 20],
+    "positional":     [10, 10, 8, 10, 14, 12, 10, 8, 6, 12],
+    "long_term":      [8, 10, 15, 20, 10, 5, 12, 8, 2, 10],
+    "equal":          [10, 10, 10, 10, 10, 10, 10, 10, 10, 10]
+  },
+  "verdict_bands": [
+    {"min": 750, "max": 1000, "verdict": "strong_buy"},
+    {"min": 620, "max": 749, "verdict": "buy"},
+    {"min": 381, "max": 619, "verdict": "no_trade"},
+    {"min": 251, "max": 380, "verdict": "sell"},
+    {"min": 10, "max": 250, "verdict": "strong_sell"}
+  ],
+  "min_stages_available": 7
+}

@@ -1,0 +1,75 @@
+name: Score1000
+options:
+  bundleIdPrefix: com.devendrajondhale
+  deploymentTarget:
+    iOS: "26.0"
+  xcodeVersion: "26.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    VERSIONING_SYSTEM: apple-generic
+    DEVELOPMENT_TEAM: ${APPLE_TEAM_ID}
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+targets:
+  Score1000:
+    type: application
+    platform: iOS
+    supportedDestinations: [iOS]
+    sources:
+      - path: Score1000
+    info:
+      path: Score1000/Info.plist
+      properties:
+        CFBundleDisplayName: SCORE1000
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        ITSAppUsesNonExemptEncryption: false
+        NSFaceIDUsageDescription: SCORE1000 uses Face ID to keep your trades, keys and analysis private.
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.devendrajondhale.score1000
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  Score1000Tests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Score1000Tests
+    dependencies:
+      - target: Score1000
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.devendrajondhale.score1000.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  Score1000:
+    build:
+      targets:
+        Score1000: all
+        Score1000Tests: [test]
+    test:
+      targets:
+        - Score1000Tests
