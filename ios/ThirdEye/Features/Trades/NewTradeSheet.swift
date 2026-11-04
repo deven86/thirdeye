@@ -88,9 +88,9 @@ struct NewTradeSheet: View {
                     field("Entry to", $entryHigh)
                     field("Stop-loss", $stop)
                     Picker("Take-profit stages", selection: $stages) {
-                        Text("3").tag(3); Text("5").tag(5)
+                        Text("3 stages").tag(3); Text("5 stages").tag(5)
                     }
-                    .pickerStyle(.segmented)
+                    .pickerStyle(.menu)
                     if let p = preview {
                         ForEach(p.takeProfits, id: \.stage) { tp in
                             LabeledContent("TP\(tp.stage) · book \(Int(tp.bookPercent))%", value: tp.price.map { fmt($0) } ?? "Trailing")
