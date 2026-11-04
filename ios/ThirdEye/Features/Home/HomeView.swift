@@ -5,6 +5,7 @@ struct HomeView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(ModelCatalog.self) private var catalog
     @Environment(MarketStore.self) private var market
+    @Environment(AnalysisStore.self) private var analyses
     @State private var demoScore = 712
 
     private var connectedCount: Int {
@@ -23,11 +24,26 @@ struct HomeView: View {
                         .floatingGlass(in: Capsule())
                 }
 
+                if !analyses.runs.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Recent analyses").font(.headline).foregroundStyle(palette.textPrimary)
+                        ForEach(Array(analyses.runs.prefix(5))) { run in
+                            NavigationLink {
+                                AnalysisReportView(run: run).navigationTitle(run.instrument.symbol)
+                            } label: { AnalysisRow(run: run) }
+                            .buttonStyle(.plain)
+                        }
+                        Text("AI spend this month: $\(String(format: "%.2f", analyses.monthToDateCost))")
+                            .font(.caption).foregroundStyle(palette.textSecondary)
+                    }
+                    .dataCard()
+                }
+
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Score preview")
                         .font(.headline)
                         .foregroundStyle(palette.textPrimary)
-                    ScoreGauge(score: demoScore, caption: "Sample only — real scores arrive in M4")
+                    ScoreGauge(score: demoScore, caption: "Sample only — run a real analysis from any product in Markets")
                         .frame(maxWidth: 360)
                         .frame(maxWidth: .infinity)
                     Slider(value: Binding(get: { Double(demoScore) }, set: { demoScore = Int($0) }),

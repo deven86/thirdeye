@@ -29,3 +29,13 @@ Each entry: date · decision · why · cost/risk.
 17. **Patterns report their own track record** on the product being viewed (hit rate after 5 bars, sample size). A pattern only counts as a signal with ≥ 8 past occurrences and ≥ 55 % hit rate.
 18. **The "Technicals" lean (Bullish/Mixed/Bearish) is a code-computed count of signals**, clearly labelled as not the AI score.
 19. Fixed a chart bug from M2: a theme change could re-trigger the chart's "ready" message in a loop. The chart now reloads data explicitly after theme/locale changes.
+
+## M4 — 10-stage AI analysis (2026-11-04)
+
+20. **Claude is the primary provider.** Stages that need fresh information use Claude's server-side web search (`web_search_20250305`, $10/1,000 searches, max 2–3 per stage). Stages without search use structured outputs (`output_config.format`, JSON Schema without min/max — ranges are enforced in code). The two cannot be combined because web-search citations are always on.
+21. **OpenAI and Gemini run in JSON mode without web search.** If a search stage is mapped to them, the stage runs on model knowledge only, is labelled as such, and its confidence is capped at 0.4.
+22. **Nothing from the model is trusted unvalidated** (`StageParser`): scores clamped to 1–100, confidence to 0–1, direction derived from the score, sources kept only if the URL was actually retrieved in that call, reasons kept only if they cite a real feature ID or a kept source. No surviving reason → confidence ≤ 0.15. Invalid JSON → one retry → stage marked unavailable (score 50, confidence 0).
+23. **The 0–1000 number, vetoes and the take-profit ladder are computed in code.** Stage 10 only proposes side, entry zone, stop and holding days; code validates them (stop side, ≤ 3 ATR from price, risk ¼–4 ATR) and builds TP1–TP5 at 1R–4R + runner. A Fast-tier verifier (separate call) checks the plan against computed facts; its issues block the trade.
+24. **Vetoes force "No trade":** fewer than 7 stages, stale data, a major event inside the holding window, any plan issue, or a plan side that contradicts the score.
+25. **Stages 1–9 run two at a time** with retry/backoff on 429/529 to stay inside new-account rate limits; the system prompt is prompt-cached.
+26. **Every run is saved** (Application Support/analyses, complete file protection) with raw model output, model IDs, prompt version and cost — the audit trail and the future calibration data. Extended thinking is not used yet.

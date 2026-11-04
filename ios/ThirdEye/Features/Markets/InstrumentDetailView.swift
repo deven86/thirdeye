@@ -2,6 +2,7 @@ import SwiftUI
 
 struct InstrumentDetailView: View {
     @Environment(MarketStore.self) private var market
+    @Environment(AnalysisStore.self) private var analyses
     @Environment(\.palette) private var palette
     @Environment(\.scenePhase) private var scenePhase
     let instrument: Instrument
@@ -14,6 +15,7 @@ struct InstrumentDetailView: View {
     @State private var hovered: Candle?
     @State private var showLogin = false
     @State private var snapshot: FeatureEngine.Snapshot?
+    @State private var showAnalyse = false
 
     private var displayTimeZone: TimeZone {
         instrument.provider == .upstox ? TimeZone(identifier: "Asia/Kolkata")! : .current
@@ -47,12 +49,8 @@ struct InstrumentDetailView: View {
                         .foregroundStyle(palette.textSecondary)
                 }
                 detailsCard
-                AdaptiveButton(title: "Analyse with AI", systemImage: "sparkles", kind: .secondary) {}
-                    .disabled(true)
-                Text("The 10-stage AI score arrives in Milestone 4.")
-                    .font(.caption)
-                    .foregroundStyle(palette.textSecondary)
-                    .frame(maxWidth: .infinity)
+                AdaptiveButton(title: "Analyse with AI", systemImage: "sparkles", kind: .primary) { showAnalyse = true }
+                pastAnalyses
             }
             .padding()
         }
@@ -80,6 +78,7 @@ struct InstrumentDetailView: View {
             }
         }
         .sheet(isPresented: $showLogin) { UpstoxLoginSheet() }
+        .sheet(isPresented: $showAnalyse) { AnalyseSheet(instrument: instrument) }
         .task(id: candles.last.map { "\($0.time.timeIntervalSince1970)|\($0.close)|\(candles.count)|\(timeframe.rawValue)" } ?? "none") {
             let bars = candles
             let tf = timeframe
@@ -176,6 +175,25 @@ struct InstrumentDetailView: View {
             }
         }
         .padding()
+    }
+
+    @ViewBuilder
+    private var pastAnalyses: some View {
+        let past = analyses.runs(for: instrument).prefix(5)
+        if !past.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Past analyses").font(.headline).foregroundStyle(palette.textPrimary)
+                ForEach(Array(past)) { run in
+                    NavigationLink {
+                        AnalysisReportView(run: run).navigationTitle(run.instrument.symbol)
+                    } label: {
+                        AnalysisRow(run: run)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .dataCard()
+        }
     }
 
     private var detailsCard: some View {
