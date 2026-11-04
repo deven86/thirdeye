@@ -1,9 +1,12 @@
 name: Research data
 
 # Linux-only. Downloads public Binance daily candles for the current top-volume USDT pairs so the
-# scoring and edge maths can be prototyped and checked on real data (artifact: research-data).
+# scoring and edge maths can be prototyped and checked on real data (published to the research-data branch).
 on:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   fetch:
@@ -43,8 +46,12 @@ jobs:
           for x in d.get("symbols", []):
               print(x["symbol"], x["status"], x.get("permissionSets", [])[:1], x.get("baseAsset"))
           PY
-      - uses: actions/upload-artifact@v4
-        with:
-          name: research-data
-          path: out
-          retention-days: 7
+      - name: Publish to the research-data branch (artifacts are not reachable from the build sandbox)
+        run: |
+          tar -czf research-data.tgz -C out .
+          git init -q pub && cd pub
+          git config user.name "github-actions" && git config user.email "actions@github.com"
+          git checkout -q --orphan research-data
+          cp ../research-data.tgz . && git add research-data.tgz
+          git commit -qm "Research data $(date -u +%FT%TZ)"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" research-data
