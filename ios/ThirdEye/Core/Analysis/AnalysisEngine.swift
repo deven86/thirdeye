@@ -130,8 +130,13 @@ final class AnalysisEngine {
         var results: [StageResult] = []
         let specs = StageSpec.all.filter { $0.id <= 9 }
         let settings = context.settings
+        // Slow-changing stages (news, events, leadership, history, sector, connected products) are reused from a
+        // recent analysis of the same product and profile — cheaper repeat analyses and Hot-trades scans.
+        let reused = Self.reusableStages(for: instrument, profile: profile, hours: settings.stageReuseHours,
+                                         runs: context.store.runs, now: Date())
+        for s in reused.values { stageStatus[s.stage] = .done }
         // Build every job on the main actor first; child tasks receive only Sendable values.
-        let jobs: [(spec: StageSpec, prompt: String, ref: ModelRef?)] = specs.map { spec in
+        let jobs: [(spec: StageSpec, prompt: String, ref: ModelRef?)] = specs.filter { reused[$0.id] == nil }.map { spec in
             (spec,
              Prompts.user(spec: spec, instrument: instrument, profile: profile, lastPrice: lastCandle.close,
                           packs: packs, priorStages: [], today: Date()),
@@ -148,14 +153,16 @@ final class AnalysisEngine {
                 group.addTask { await AnalysisEngine.runStage(job.spec, prompt: job.prompt, ref: job.ref, repairRef: repairRef, featureIDs: ids) }
                 next += 1
             }
+            var fresh: [StageResult] = []
             for await result in group {
                 results.append(result)
+                fresh.append(result)
                 stageStatus[result.stage] = result.status
                 runningCost += result.costUSD
-                run?.stages = results.sorted { $0.stage < $1.stage }
+                run?.stages = (results + reused.values).sorted { $0.stage < $1.stage }
                 // Stop early when the first two stages hit the same request/key error — the rest would too.
-                if results.count == 2, results.allSatisfy({ $0.status == .unavailable }),
-                   let reason = results.first?.summary, reason == results.last?.summary,
+                if fresh.count == 2, fresh.allSatisfy({ $0.status == .unavailable }),
+                   let reason = fresh.first?.summary, reason == fresh.last?.summary,
                    reason.hasPrefix("Provider error 4") || reason.contains("rejected this key") {
                     abortReason = reason
                 }
@@ -179,6 +186,8 @@ final class AnalysisEngine {
             }
         }
         if Task.isCancelled { return }
+        results.append(contentsOf: reused.values)
+        run?.stages = results.sorted { $0.stage < $1.stage }
         if let abortReason {
             results.append(StageResult.unavailable(10, name: StageSpec.spec(10).name, reason: "Skipped — \(abortReason)"))
             stageStatus[10] = .unavailable
@@ -267,6 +276,40 @@ final class AnalysisEngine {
         run?.finishedAt = Date()
         if let run { context.store.save(run) }
         phase = .done
+    }
+
+    // MARK: - Stage reuse
+
+    static let reusableStageIDs: [Int] = [1, 2, 3, 4, 7, 8]
+
+    /// Completed stages from the newest analysis of the same product and profile within `hours`, made with the
+    /// same prompts. Never chains (a reused stage is not reused again) and counts no cost.
+    nonisolated static func reusableStages(for instrument: Instrument, profile: HoldingProfile, hours: Int,
+                                           runs: [AnalysisRun], now: Date) -> [Int: StageResult] {
+        guard hours > 0 else { return [:] }
+        let cutoff = now.addingTimeInterval(-Double(hours) * 3600)
+        let recent = runs.filter {
+            $0.instrument.id == instrument.id && $0.profile == profile && $0.startedAt >= cutoff && $0.startedAt <= now
+                && $0.finishedAt != nil && $0.promptVersion == StageSpec.promptVersion
+        }.sorted { $0.startedAt > $1.startedAt }
+        var out: [Int: StageResult] = [:]
+        for id in reusableStageIDs {
+            for source in recent {
+                guard var s = source.stages.first(where: { $0.stage == id && $0.status == .done }),
+                      s.extra["reusedFrom"] == nil else { continue }
+                let elapsedDays = Int(now.timeIntervalSince(source.startedAt) / 86_400)
+                for key in ["next_major_event_days", "next_macro_event_days"] {
+                    if let d = s.extra[key].flatMap(Int.init) { s.extra[key] = String(max(d - elapsedDays, 0)) }
+                }
+                s.extra["reusedFrom"] = source.id.uuidString
+                s.costUSD = 0
+                s.usage = AIUsage()
+                s.warnings.insert("Reused from the analysis of \(source.startedAt.formatted(date: .abbreviated, time: .shortened)) — no new AI cost.", at: 0)
+                out[id] = s
+                break
+            }
+        }
+        return out
     }
 
     // MARK: - One stage (off the main actor)

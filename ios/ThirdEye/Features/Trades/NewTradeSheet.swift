@@ -6,6 +6,7 @@ struct NewTradeSheet: View {
     @Environment(\.palette) private var palette
     @Environment(AppSettings.self) private var settings
     @Environment(TradeStore.self) private var store
+    @Environment(MarketStore.self) private var market
     let instrument: Instrument
     /// The analysis this came from (nil = the user's own idea).
     let run: AnalysisRun?
@@ -39,6 +40,8 @@ struct NewTradeSheet: View {
     @State private var quantity = ""
     @State private var stages = 5
     @State private var notes = ""
+    @State private var correlations: [String: Double] = [:]
+    @State private var overrideGuard = false
 
     private var verdict: Verdict? { run.flatMap { Verdict(rawValue: $0.verdict ?? "") } }
     private var currency: String { instrument.currency }
@@ -55,6 +58,24 @@ struct NewTradeSheet: View {
                                         invalidation: plan?.invalidation ?? "", rationale: plan?.rationale ?? "Own plan"),
                                   lastPrice: referencePrice ?? (lo + hi) / 2, atr: nil, tick: instrument.tickSize, stages: stages)
     }
+
+    private var mode: TradeMode { settings.paperMode ? .paper : .real }
+
+    private var guardChecks: [RiskGuard.Check] {
+        var out = [RiskGuard.weeklyCheck(store.trades, mode: mode, limitR: settings.weeklyLossLimitR, now: Date())]
+        if let p = preview, let q = num(quantity), q > 0,
+           let open = RiskGuard.openRiskCheck(store.trades, mode: mode, currency: currency, newRisk: abs(p.entryMid - p.stopLoss) * q,
+                                              capital: num(capital), capPercent: settings.maxOpenRiskPercent) {
+            out.append(open)
+        }
+        if let same = RiskGuard.sameBetCheck(newInstrument: instrument, side: plan?.side ?? side, trades: store.trades,
+                                             mode: mode, correlations: correlations) {
+            out.append(same)
+        }
+        return out
+    }
+
+    private var guardSaysStop: Bool { guardChecks.contains { $0.level == .stop } }
 
     private var suggestedQuantity: Double {
         guard let p = preview, let c = num(capital), let r = num(riskPercent) else { return 0 }
@@ -112,6 +133,24 @@ struct NewTradeSheet: View {
                 } footer: {
                     Text("Suggested quantity loses \(riskPercent.isEmpty ? "—" : riskPercent)% of capital if the stop is hit\(instrument.lotSize.map { $0 > 1 ? ", rounded down to lots of \(Int($0))" : "" } ?? "").")
                 }
+                Section {
+                    ForEach(guardChecks) { c in
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(c.title).font(.callout.weight(.semibold))
+                                Text(c.detail).font(.caption).foregroundStyle(palette.textSecondary)
+                            }
+                        } icon: {
+                            Image(systemName: c.level == .ok ? "checkmark.shield" : c.level == .caution ? "exclamationmark.triangle" : "hand.raised.fill")
+                                .foregroundStyle(c.level == .ok ? palette.up : c.level == .caution ? palette.warning : palette.down)
+                        }
+                    }
+                    if guardSaysStop {
+                        Toggle("I understand — save anyway", isOn: $overrideGuard)
+                    }
+                } header: {
+                    Text("Risk guard")
+                }
                 Section("Notes") {
                     TextField("Why you are taking it", text: $notes, axis: .vertical)
                 }
@@ -126,10 +165,12 @@ struct NewTradeSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
-                        .disabled(preview == nil || !(preview?.issues.isEmpty ?? false) || (num(quantity) ?? 0) <= 0)
+                        .disabled(preview == nil || !(preview?.issues.isEmpty ?? false) || (num(quantity) ?? 0) <= 0
+                                  || (guardSaysStop && !overrideGuard))
                 }
             }
             .onAppear(perform: prefill)
+            .task { await measureCorrelations() }
             .onChange(of: side) { _, _ in if plan == nil { prefill() } }
             .onChange(of: suggestedQuantity) { _, q in if quantity.isEmpty || num(quantity) == 0 { quantity = q > 0 ? q.formatted(.number.grouping(.never)) : "" } }
         }
@@ -163,6 +204,22 @@ struct NewTradeSheet: View {
         }
         riskPercent = plain(settings.riskPercent)
         if let c = settings.capital[currency], c > 0 { capital = plain(c) }
+    }
+
+    /// 60-day daily-return correlation with each product you already hold or plan (max 5, so data limits hold).
+    private func measureCorrelations() async {
+        var seen = Set<String>()
+        let others = store.trades
+            .filter { $0.mode == mode && ($0.status == .open || $0.status == .upcoming) && $0.instrument.id != instrument.id }
+            .map(\.instrument)
+            .filter { seen.insert($0.id).inserted }
+        guard !others.isEmpty, let mine = try? await market.candles(for: instrument, timeframe: .d1) else { return }
+        for other in others.prefix(5) {
+            if let theirs = try? await market.candles(for: other, timeframe: .d1),
+               let rho = RiskGuard.returnCorrelation(mine, theirs) {
+                correlations[other.id] = rho
+            }
+        }
     }
 
     private func roundTo(_ v: Double) -> Double {

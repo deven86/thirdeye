@@ -11,6 +11,7 @@ struct ThirdEyeApp: App {
     @State private var analyses = AnalysisStore()
     @State private var trades = TradeStore()
     @State private var hotScans = HotScanStore()
+    @State private var outcomes = OutcomeStore()
 
     var body: some Scene {
         WindowGroup {
@@ -25,6 +26,7 @@ struct ThirdEyeApp: App {
             .environment(trades)
             .environment(hotScans)
             .environment(monitor)
+            .environment(outcomes)
         }
     }
 }
@@ -37,6 +39,8 @@ struct RootView: View {
     @Environment(TradeStore.self) private var trades
     @Environment(MarketStore.self) private var market
     @Environment(MonitorStore.self) private var monitor
+    @Environment(OutcomeStore.self) private var outcomes
+    @Environment(AnalysisStore.self) private var analyses
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -60,6 +64,7 @@ struct RootView: View {
             lock.handleScenePhase(phase)
             if phase == .active {
                 Task { await monitor.refreshAll(trades: trades.trades, market: market) }
+                Task { await outcomes.gradeDue(analyses.runs, market: market) }
             }
         }
         // Keep the PC monitor's watch list in step with every trade change (debounced).

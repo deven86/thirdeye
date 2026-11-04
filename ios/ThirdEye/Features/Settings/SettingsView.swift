@@ -29,6 +29,14 @@ struct SettingsView: View {
                         Label("Model Tiers", systemImage: "square.stack.3d.up")
                     }
                 }
+                Picker(selection: $settings.stageReuseHours) {
+                    Text("Off").tag(0)
+                    Text("6 hours").tag(6)
+                    Text("12 hours").tag(12)
+                    Text("24 hours").tag(24)
+                } label: {
+                    Label("Reuse news & context", systemImage: "arrow.uturn.backward.circle")
+                }
             }
 
             Section("Markets") {
@@ -130,10 +138,16 @@ struct SettingsView: View {
                 ForEach(settings.capital.keys.sorted(), id: \.self) { cur in
                     LabeledContent("Capital (\(cur))", value: money(settings.capital[cur] ?? 0, cur))
                 }
+                Stepper(value: $settings.weeklyLossLimitR, in: 1...10, step: 0.5) {
+                    LabeledContent("Pause after a losing week", value: String(format: "−%.1fR", settings.weeklyLossLimitR))
+                }
+                Stepper(value: $settings.maxOpenRiskPercent, in: 2...20, step: 1) {
+                    LabeledContent("Max open risk", value: String(format: "%.0f%% of capital", settings.maxOpenRiskPercent))
+                }
             } header: {
-                Text("Trading")
+                Text("Trading & risk guard")
             } footer: {
-                Text("New trades are recorded as \(settings.paperMode ? "paper" : "REAL MONEY") trades. Switching to real money needs Face ID. Risk is capped at 2% per trade. Capital is set when you size your first trade in each currency.")
+                Text("New trades are recorded as \(settings.paperMode ? "paper" : "REAL MONEY") trades. Switching to real money needs Face ID. Risk is capped at 2% per trade. The risk guard warns before a new trade when the last 7 days lost more than the limit, when total open risk would pass the cap, or when the trade is the same bet as ones you hold.")
             }
 
             Section("About") {

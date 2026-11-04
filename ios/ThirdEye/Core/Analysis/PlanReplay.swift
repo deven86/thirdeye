@@ -78,6 +78,51 @@ nonisolated enum PlanReplay {
                        stoppedBeforeTP1: stoppedBeforeTP1)
     }
 
+    nonisolated struct LevelsResult: Equatable, Sendable {
+        var r: Double
+        var targetsHit: Int
+        var stopHit: Bool
+    }
+
+    /// Like `simulate`, but with a real plan's prices. `c[0]` is the bar the entry filled on; management starts on
+    /// the next bar. After TP1 the stop moves to the entry, after each later target to the previous target.
+    static func simulateLevels(_ c: [Candle], side: Int, entry: Double, stop initialStop: Double,
+                               targets: [(price: Double, fraction: Double)], costPct: Double = 0) -> LevelsResult? {
+        let risk = abs(entry - initialStop)
+        guard risk > 0, !c.isEmpty else { return nil }
+        let s = Double(side)
+        let ordered = targets.sorted { side > 0 ? $0.price < $1.price : $0.price > $1.price }
+        var stop = initialStop
+        var remaining = 1.0, realized = 0.0
+        var next = 0
+        var stopHit = false
+        var j = 1
+        while j < c.count {
+            let bar = c[j]
+            if side > 0 ? bar.low <= stop : bar.high >= stop {
+                let fill = side > 0 ? min(bar.open, stop) : max(bar.open, stop)
+                realized += remaining * s * (fill - entry) / risk
+                remaining = 0
+                stopHit = true
+                break
+            }
+            while next < ordered.count {
+                let t = ordered[next]
+                if !(side > 0 ? bar.high >= t.price : bar.low <= t.price) { break }
+                let fill = side > 0 ? max(bar.open, t.price) : min(bar.open, t.price)
+                realized += t.fraction * s * (fill - entry) / risk
+                remaining -= t.fraction
+                stop = next == 0 ? entry : ordered[next - 1].price
+                next += 1
+            }
+            j += 1
+        }
+        if remaining > 1e-9, let last = c.last {
+            realized += remaining * s * (last.close - entry) / risk
+        }
+        return LevelsResult(r: realized - costPct / 100 * entry / risk, targetsHit: next, stopHit: stopHit)
+    }
+
     /// Replays every past bar whose full time limit lies inside the data.
     static func baseRate(_ c: [Candle], side: String, stopATR: Double, horizon: Int, costPct: Double) -> BaseRate? {
         guard stopATR > 0, horizon > 0, c.count > horizon + 30 else { return nil }

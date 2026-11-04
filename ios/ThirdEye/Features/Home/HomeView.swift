@@ -10,6 +10,7 @@ struct HomeView: View {
     @State private var prices = PriceBook()
     @Environment(HotScanStore.self) private var hotScans
     @Environment(MonitorStore.self) private var monitor
+    @Environment(OutcomeStore.self) private var outcomes
 
     private var hotSubtitle: String {
         guard let last = hotScans.scans.first else {
@@ -25,6 +26,22 @@ struct HomeView: View {
 
     private var connectedCount: Int {
         AIProviderKind.allCases.filter { catalog.hasKey[$0] == true }.count
+    }
+
+    private var reportCardSummary: String {
+        let graded = analyses.runs.filter { outcomes.outcomes[$0.id] != nil }.count
+        let waiting = outcomes.pending(analyses.runs)
+        if graded == 0 { return waiting > 0 ? "\(waiting) ready to grade" : "grades start after each holding period" }
+        let card = ReportCard.build(runs: analyses.runs, outcomes: outcomes.outcomes)
+        return "\(graded) graded" + (card.directionRightPct.map { " · \(Int($0.rounded()))% right" } ?? "")
+    }
+
+    /// The risk guard's pause suggestion after a losing week.
+    private var losingWeek: String? {
+        let mode: TradeMode = settings.paperMode ? .paper : .real
+        let week = RiskGuard.lastSevenDays(trades.trades, mode: mode, now: Date())
+        guard week.count > 0, week.r <= -settings.weeklyLossLimitR else { return nil }
+        return "Losing week (\(String(format: "%+.1f", week.r))R) — the risk guard suggests a pause"
     }
 
     private var monitorOfflineText: String {
@@ -47,6 +64,14 @@ struct HomeView: View {
                             .floatingGlass(in: Capsule())
                     }
                     .buttonStyle(.plain)
+                }
+                if let losing = losingWeek {
+                    Label(losing, systemImage: "hand.raised.fill")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(palette.down)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .floatingGlass(in: Capsule())
                 }
                 if settings.paperMode {
                     Label("Paper mode — no real money", systemImage: "doc.text")
@@ -105,6 +130,16 @@ struct HomeView: View {
                         }
                         Text("AI spend this month: $\(String(format: "%.2f", analyses.monthToDateCost))")
                             .font(.caption).foregroundStyle(palette.textSecondary)
+                        NavigationLink { ReportCardView() } label: {
+                            HStack {
+                                Label("Report card", systemImage: "checkmark.seal")
+                                    .font(.callout.weight(.semibold))
+                                Spacer()
+                                Text(reportCardSummary).font(.caption).foregroundStyle(palette.textSecondary)
+                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(palette.textSecondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
                     }
                     .dataCard()
                 }

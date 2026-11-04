@@ -17,6 +17,9 @@ final class AppSettings {
         static let hotMarket = "settings.hotMarket"
         static let hotProfile = "settings.hotProfile"
         static let hotCandidates = "settings.hotCandidates"
+        static let stageReuseHours = "settings.stageReuseHours"
+        static let weeklyLossLimitR = "settings.weeklyLossLimitR"
+        static let maxOpenRiskPercent = "settings.maxOpenRiskPercent"
     }
 
     private let defaults: UserDefaults
@@ -67,6 +70,20 @@ final class AppSettings {
         didSet { defaults.set(hotCandidates, forKey: Keys.hotCandidates) }
     }
 
+    /// Reuse news/events/context stages from an analysis of the same product within this many hours (0 = off).
+    var stageReuseHours: Int {
+        didSet { defaults.set(stageReuseHours, forKey: Keys.stageReuseHours) }
+    }
+
+    /// Risk guard: pause suggestion after losing this many R in 7 days, and the cap on total open risk (% of capital).
+    var weeklyLossLimitR: Double {
+        didSet { defaults.set(weeklyLossLimitR, forKey: Keys.weeklyLossLimitR) }
+    }
+
+    var maxOpenRiskPercent: Double {
+        didSet { defaults.set(maxOpenRiskPercent, forKey: Keys.maxOpenRiskPercent) }
+    }
+
     var tierAssignments: [ModelTier: ModelRef] {
         didSet { saveAssignments() }
     }
@@ -86,6 +103,11 @@ final class AppSettings {
         hotProfile = HoldingProfile(rawValue: defaults.string(forKey: Keys.hotProfile) ?? "") ?? .swing
         let candidates = defaults.integer(forKey: Keys.hotCandidates)
         hotCandidates = candidates == 5 ? 5 : 3
+        stageReuseHours = defaults.object(forKey: Keys.stageReuseHours) as? Int ?? 12
+        let lossLimit = defaults.double(forKey: Keys.weeklyLossLimitR)
+        weeklyLossLimitR = lossLimit > 0 ? lossLimit : 3
+        let openCap = defaults.double(forKey: Keys.maxOpenRiskPercent)
+        maxOpenRiskPercent = openCap > 0 ? openCap : 6
         if let data = defaults.data(forKey: Keys.tierAssignments),
            let decoded = try? JSONDecoder().decode([String: ModelRef].self, from: data) {
             var map: [ModelTier: ModelRef] = [:]

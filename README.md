@@ -32,4 +32,6 @@ cd ios && xcodegen generate && open ThirdEye.xcodeproj
 - [x] **M7 Hot trades** — code screen → AI shortlist → full analysis of top 3; HOT only when every check passes
 - [x] **0.8 Scoring v2** — confidence-weighted score, explicit checks with grades and Watch levels, history check of the plan, cleaner Hot-trades universe (DECISIONS #38–43)
 - [ ] **M6 Alerts** — Windows PC monitor (Go) + native push; setup guide [docs/ALERTS.md](docs/ALERTS.md) (DECISIONS #46–50)
+- [x] **0.9 extras** — report card (grades every analysis afterwards), stage reuse for cheaper repeats, risk guard (DECISIONS #51–53)
+- [ ] **Lock Screen live trade + widgets** — after alerts work (needs App Group + widget extension)
 - [ ] M8 Calibration + hardening
