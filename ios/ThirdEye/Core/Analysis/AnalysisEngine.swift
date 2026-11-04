@@ -53,8 +53,8 @@ final class AnalysisEngine {
         for s in StageSpec.all {
             guard let model = settings.tierAssignments[s.tier]?.modelID else { continue }
             let input = s.packs.isEmpty ? 3_000 : 2_500 + 2_000 * s.packs.count
-            let searchTokens = s.webSearch ? 6_000 * s.maxSearches : 0
-            total += Pricing.cost(AIUsage(inputTokens: input + searchTokens, outputTokens: s.maxTokens / 2,
+            let searchTokens = s.webSearch ? 12_000 * s.maxSearches : 0
+            total += Pricing.cost(AIUsage(inputTokens: input + searchTokens, outputTokens: 1_200,
                                           webSearches: s.webSearch ? s.maxSearches : 0), model: model)
         }
         if let fast = settings.tierAssignments[.fast]?.modelID {
@@ -124,13 +124,14 @@ final class AnalysisEngine {
              settings.tierAssignments[spec.tier])
         }
         let ids = featureIDs
+        let repairRef = settings.tierAssignments[.fast]
         var abortReason: String?
         await withTaskGroup(of: StageResult.self) { group in
             var next = 0
             while next < min(2, jobs.count) {
                 let job = jobs[next]
                 stageStatus[job.spec.id] = .running
-                group.addTask { await AnalysisEngine.runStage(job.spec, prompt: job.prompt, ref: job.ref, featureIDs: ids) }
+                group.addTask { await AnalysisEngine.runStage(job.spec, prompt: job.prompt, ref: job.ref, repairRef: repairRef, featureIDs: ids) }
                 next += 1
             }
             for await result in group {
@@ -158,7 +159,7 @@ final class AnalysisEngine {
                 if next < jobs.count, !Task.isCancelled {
                     let job = jobs[next]
                     stageStatus[job.spec.id] = .running
-                    group.addTask { await AnalysisEngine.runStage(job.spec, prompt: job.prompt, ref: job.ref, featureIDs: ids) }
+                    group.addTask { await AnalysisEngine.runStage(job.spec, prompt: job.prompt, ref: job.ref, repairRef: repairRef, featureIDs: ids) }
                     next += 1
                 }
             }
@@ -184,7 +185,8 @@ final class AnalysisEngine {
         stageStatus[10] = .running
         let prompt10 = Prompts.user(spec: spec10, instrument: instrument, profile: profile, lastPrice: lastCandle.close,
                                     packs: packs, priorStages: results, today: Date())
-        let final = await Self.runStage(spec10, prompt: prompt10, ref: settings.tierAssignments[.deep], featureIDs: featureIDs)
+        let final = await Self.runStage(spec10, prompt: prompt10, ref: settings.tierAssignments[.deep],
+                                        repairRef: settings.tierAssignments[.fast], featureIDs: featureIDs)
         results.append(final)
         stageStatus[10] = final.status
         runningCost += final.costUSD
@@ -238,48 +240,65 @@ final class AnalysisEngine {
 
     // MARK: - One stage (off the main actor)
 
-    nonisolated static func runStage(_ spec: StageSpec, prompt: String, ref: ModelRef?, featureIDs: Set<String>) async -> StageResult {
+    nonisolated static func runStage(_ spec: StageSpec, prompt: String, ref: ModelRef?, repairRef: ModelRef?,
+                                     featureIDs: Set<String>) async -> StageResult {
         guard let ref else { return .unavailable(spec.id, name: spec.name, reason: "No \(spec.tier.title) model selected.") }
         guard let key = try? KeychainStore().get(ref.provider.keychainAccount) else {
             return .unavailable(spec.id, name: spec.name, reason: "No \(ref.provider.displayName) key.")
         }
-        let client = ref.provider.chatClient
         let useSearch = spec.webSearch && ref.provider == .anthropic
-        var request = AIRequest(system: Prompts.system, user: prompt, maxTokens: spec.maxTokens,
+        let request = AIRequest(system: Prompts.system, user: prompt, maxTokens: spec.maxTokens,
                                 webSearch: useSearch, maxSearches: spec.maxSearches,
-                                jsonSchema: useSearch || spec.id == 10 || spec.id == 2 ? nil : Prompts.stageSchema)
+                                jsonSchema: useSearch ? nil : Prompts.schema(forStage: spec.id))
         var usage = AIUsage()
-        var lastError = ""
-        // One retry: on invalid JSON the second attempt is told what went wrong.
-        for attempt in 0..<2 {
-            do {
-                let response = try await client.complete(request, model: ref.modelID, apiKey: key)
-                usage = usage + response.usage
-                let obj = try StageParser.extractObject(response.text)
-                let (core, warnings) = StageParser.validate(obj, spec: spec, allowedFeatureIDs: featureIDs,
-                                                            searched: response.searchedSources,
-                                                            searchAvailable: response.searchAvailable)
-                return StageResult(stage: spec.id, name: spec.name, status: .done, score: core.score, direction: core.direction,
-                                   confidence: core.confidence, summary: core.summary, reasons: core.reasons,
-                                   sources: core.sources, warnings: warnings, provider: ref.provider, model: ref.modelID,
-                                   usedWebSearch: useSearch, usage: usage, costUSD: Pricing.cost(usage, model: ref.modelID),
-                                   rawOutput: response.text, extra: core.extra)
-            } catch let error as StageParser.ParseError {
-                lastError = "The model did not return valid JSON (\(error))."
-                if attempt == 0 {
-                    request.user += "\n\nYour previous reply was not a single valid JSON object. Reply again with ONLY the JSON object."
+        var costUSD = 0.0
+        var notes: [String] = []
+        let response: AIResponse
+        do {
+            response = try await ref.provider.chatClient.complete(request, model: ref.modelID, apiKey: key)
+        } catch {
+            return .unavailable(spec.id, name: spec.name, reason: error.localizedDescription)
+        }
+        usage = response.usage
+        costUSD = Pricing.cost(usage, model: ref.modelID)
+        if response.stopReason == "max_tokens" { notes.append("The model's answer hit the length limit and was cut off.") }
+
+        var obj = try? StageParser.extractObject(response.text)
+        if obj == nil || obj?["score"] == nil {
+            // Cheap repair: a Fast model reformats the draft with guaranteed JSON — no new searches, no new facts.
+            if let repairRef, let repairKey = try? KeychainStore().get(repairRef.provider.keychainAccount) {
+                let fix = AIRequest(system: Prompts.repairSystem, user: Prompts.repairUser(stage: spec.id, draft: response.text),
+                                    maxTokens: 3000, jsonSchema: Prompts.schema(forStage: spec.id))
+                if let repaired = try? await repairRef.provider.chatClient.complete(fix, model: repairRef.modelID, apiKey: repairKey) {
+                    costUSD += Pricing.cost(repaired.usage, model: repairRef.modelID)
+                    usage = usage + repaired.usage
+                    if let o = try? StageParser.extractObject(repaired.text), o["score"] != nil {
+                        obj = o
+                        notes.append("Answer was reformatted by \(repairRef.modelID) (no new facts added).")
+                    }
                 }
-            } catch {
-                lastError = error.localizedDescription
-                break
             }
         }
-        var failed = StageResult.unavailable(spec.id, name: spec.name, reason: lastError)
-        failed.provider = ref.provider
-        failed.model = ref.modelID
-        failed.usage = usage
-        failed.costUSD = Pricing.cost(usage, model: ref.modelID)
-        return failed
+        guard let obj, obj["score"] != nil else {
+            var failed = StageResult.unavailable(spec.id, name: spec.name,
+                                                 reason: response.stopReason == "max_tokens"
+                                                    ? "The answer was cut off before it finished."
+                                                    : "The model did not return a usable answer.")
+            failed.provider = ref.provider
+            failed.model = ref.modelID
+            failed.usage = usage
+            failed.costUSD = costUSD
+            failed.rawOutput = response.text
+            return failed
+        }
+        let (core, warnings) = StageParser.validate(obj, spec: spec, allowedFeatureIDs: featureIDs,
+                                                    searched: response.searchedSources,
+                                                    searchAvailable: response.searchAvailable)
+        return StageResult(stage: spec.id, name: spec.name, status: .done, score: core.score, direction: core.direction,
+                           confidence: core.confidence, summary: core.summary, reasons: core.reasons,
+                           sources: core.sources, warnings: notes + warnings, provider: ref.provider, model: ref.modelID,
+                           usedWebSearch: useSearch, usage: usage, costUSD: costUSD,
+                           rawOutput: response.text, extra: core.extra)
     }
 
     nonisolated static func verify(plan: TradePlan, instrument: Instrument, lastPrice: Double, facts: String,

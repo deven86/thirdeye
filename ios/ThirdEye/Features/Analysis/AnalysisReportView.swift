@@ -179,6 +179,7 @@ private struct StageCard: View {
     let result: StageResult
     let weight: Double
     @State private var expanded = false
+    @State private var showRaw = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -233,6 +234,19 @@ private struct StageCard: View {
                 Text("\(result.model ?? "—")\(result.usedWebSearch ? " · web search \(result.usage.webSearches)" : "") · confidence \(String(format: "%.2f", result.confidence)) · $\(String(format: "%.3f", result.costUSD))")
                     .font(.caption2.monospaced())
                     .foregroundStyle(palette.textSecondary)
+                if !result.rawOutput.isEmpty {
+                    DisclosureGroup("Show raw AI output", isExpanded: $showRaw) {
+                        ScrollView {
+                            Text(result.rawOutput)
+                                .font(.caption2.monospaced())
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxHeight: 260)
+                    }
+                    .font(.caption)
+                    .tint(palette.textSecondary)
+                }
             }
         }
         .dataCard(padding: 14)

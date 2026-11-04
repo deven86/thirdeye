@@ -63,6 +63,38 @@ struct StageParserTests {
         let obj = try StageParser.extractObject("Here you go:\n```json\n{\"score\": 70}\n```")
         #expect(obj["score"] as? Int == 70)
         #expect(throws: StageParser.ParseError.noJSON) { try StageParser.extractObject("no json here") }
+        let fenced = try StageParser.extractObject("```json\n{\"score\": 55, \"x\": {\"y\": 1}}\n```")
+        #expect(fenced["score"] as? Int == 55)
+    }
+
+    @Test func extractsLastStageObjectAmongProseAndBraces() throws {
+        let text = #"""
+        I'll check {the news} first. Interim note: {"draft": true}
+        Final answer:
+        {"stage":1,"score":61,"summary":"Uses braces } and \"quotes\" inside strings","reasons":[],"sources":[],"warnings":[]}
+        Hope this helps.
+        """#
+        let obj = try StageParser.extractObject(text)
+        #expect(obj["score"] as? Int == 61)
+        #expect((obj["summary"] as? String)?.contains("braces }") == true)
+    }
+
+    @Test func truncatedAnswerIsNotAccepted() {
+        #expect(throws: StageParser.ParseError.notAnObject) {
+            try StageParser.extractObject(#"{"stage":1,"score":61,"summary":"cut off mid-sente"#)
+        }
+    }
+
+    @Test func repairSchemaAddsStageFields() throws {
+        let s10 = String(decoding: try Prompts.schema(forStage: 10).data(), as: UTF8.self)
+        for field in ["side", "entry_low", "entry_high", "stop_loss", "holding_days", "invalidation"] {
+            #expect(s10.contains("\"\(field)\""))
+        }
+        let s2 = String(decoding: try Prompts.schema(forStage: 2).data(), as: UTF8.self)
+        #expect(s2.contains("next_major_event_days"))
+        let s6 = String(decoding: try Prompts.schema(forStage: 6).data(), as: UTF8.self)
+        #expect(!s6.contains("next_major_event_days"))
+        #expect(!s10.contains("minimum"))
     }
 
     @Test func dropsInventedSourcesAndUnsupportedReasons() throws {

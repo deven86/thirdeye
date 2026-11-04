@@ -4,18 +4,42 @@ import Foundation
 nonisolated enum StageParser {
     nonisolated enum ParseError: Error, Equatable { case noJSON, notAnObject }
 
-    /// Finds the JSON object in a reply (tolerates code fences or stray prose).
+    /// Finds the stage's JSON object in a reply. Scans every balanced top-level {...} (string-aware),
+    /// and returns the last one that parses and contains "score" — tolerant of prose, fences and citations.
     static func extractObject(_ text: String) throws -> [String: Any] {
-        var t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if t.hasPrefix("```") {
-            t = t.replacingOccurrences(of: "```json", with: "").replacingOccurrences(of: "```", with: "")
+        let chars = Array(text.unicodeScalars)
+        var candidates: [String] = []
+        var depth = 0, start = -1, inString = false, escaped = false
+        for (i, c) in chars.enumerated() {
+            if inString {
+                if escaped { escaped = false } else if c == "\\" { escaped = true } else if c == "\"" { inString = false }
+                continue
+            }
+            switch c {
+            case "\"": if depth > 0 { inString = true }
+            case "{":
+                if depth == 0 { start = i }
+                depth += 1
+            case "}":
+                guard depth > 0 else { continue }
+                depth -= 1
+                if depth == 0, start >= 0 {
+                    var s = String.UnicodeScalarView()
+                    s.append(contentsOf: chars[start...i])
+                    candidates.append(String(s))
+                }
+            default: break
+            }
         }
-        guard let start = t.firstIndex(of: "{"), let end = t.lastIndex(of: "}"), start < end else { throw ParseError.noJSON }
-        let slice = String(t[start...end])
-        guard let obj = try? JSONSerialization.jsonObject(with: Data(slice.utf8)) as? [String: Any] else {
-            throw ParseError.notAnObject
+        if candidates.isEmpty { throw text.contains("{") ? ParseError.notAnObject : ParseError.noJSON }
+        var firstObject: [String: Any]?
+        for c in candidates.reversed() {
+            guard let obj = try? JSONSerialization.jsonObject(with: Data(c.utf8)) as? [String: Any] else { continue }
+            if obj["score"] != nil || obj["ok"] != nil { return obj }
+            if firstObject == nil { firstObject = obj }
         }
-        return obj
+        if let firstObject { return firstObject }
+        throw ParseError.notAnObject
     }
 
     static func normalizeURL(_ s: String) -> String {

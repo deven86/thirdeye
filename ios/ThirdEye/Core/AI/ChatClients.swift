@@ -41,6 +41,8 @@ nonisolated struct AIResponse: Sendable {
     var usage: AIUsage
     var model: String
     var searchAvailable: Bool
+    /// "end_turn", "max_tokens" (answer was cut off), …
+    var stopReason: String? = nil
 }
 
 nonisolated protocol ChatClient: Sendable {
@@ -148,6 +150,7 @@ nonisolated struct AnthropicChat: ChatClient {
         var usage = AIUsage()
         var sources: [AISource] = []
         var finalText = ""
+        var stop: String?
         var continuation: [Any]?
         // `pause_turn` (long search turns): send the paused content back unchanged, at most twice.
         for _ in 0..<3 {
@@ -157,12 +160,14 @@ nonisolated struct AnthropicChat: ChatClient {
             usage = usage + parsed.usage
             sources += parsed.sources
             finalText = parsed.text
+            stop = parsed.stopReason
             guard parsed.stopReason == "pause_turn" else { break }
             continuation = (continuation ?? []) + parsed.content
         }
         var seen = Set<String>()
         let unique = sources.filter { seen.insert($0.url).inserted }
-        return AIResponse(text: finalText, searchedSources: unique, usage: usage, model: model, searchAvailable: true)
+        return AIResponse(text: finalText, searchedSources: unique, usage: usage, model: model, searchAvailable: true,
+                          stopReason: stop)
     }
 
     nonisolated struct Parsed { var text: String; var sources: [AISource]; var usage: AIUsage; var stopReason: String?; var content: [Any] }
