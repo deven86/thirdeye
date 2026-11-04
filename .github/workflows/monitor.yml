@@ -1,0 +1,55 @@
+name: Windows monitor
+
+# Tests the Go monitor and publishes the Windows download as a GitHub release.
+# Linux runners only (cross-compiled for Windows), so it does not depend on the Mac pool.
+on:
+  push:
+    branches: [main]
+    paths: ["monitor/**", ".github/workflows/monitor.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: Test
+        working-directory: monitor
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; echo "::error::gofmt"; exit 1; }
+          go vet ./...
+          GOOS=windows go vet ./...
+          go test -race -count=1 ./...
+      - name: Build Windows binaries
+        working-directory: monitor
+        run: |
+          V=$(cat VERSION)
+          mkdir -p ../dist
+          for arch in amd64 arm64; do
+            mkdir -p pkg-$arch
+            GOOS=windows GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$V" -o pkg-$arch/thirdeye-monitor.exe .
+            cp README-WINDOWS.txt pkg-$arch/README.txt
+            name=x64; [ $arch = arm64 ] && name=arm64
+            (cd pkg-$arch && zip -q ../../dist/thirdeye-monitor-windows-$name.zip thirdeye-monitor.exe README.txt)
+          done
+          (cd ../dist && sha256sum *.zip > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+      - name: Publish release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="monitor-v$VERSION"
+          NOTES="Third Eye Windows monitor $VERSION — setup guide: https://github.com/${{ github.repository }}/blob/main/docs/ALERTS.md"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --title "Windows monitor $VERSION" --notes "$NOTES" --latest
+          fi
