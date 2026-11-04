@@ -12,7 +12,7 @@ nonisolated struct StageSpec: Sendable, Identifiable {
     var packs: [Timeframe]
     var task: String
 
-    static let promptVersion = "p2-2026-11-04"
+    static let promptVersion = "p3-2026-11-04"
 
     static let all: [StageSpec] = [
         StageSpec(id: 1, name: "Product news", tier: .fast, webSearch: true, maxSearches: 2, maxTokens: 4000, packs: [],
@@ -26,7 +26,10 @@ nonisolated struct StageSpec: Sendable, Identifiable {
                   Find scheduled or expected events that can move this product: results dates, dividends/splits/bonus, \
                   board meetings, index inclusion, lock-in expiries, policy or central-bank meetings, macro data, \
                   token unlocks or upgrades. Judge whether they are more likely to lift or weigh on the price. \
-                  Also return "next_major_event_days": calendar days until the next major event (integer), or null if none is known.
+                  Also return "next_major_event_days": calendar days until the next major event SPECIFIC to this product \
+                  (its own results/earnings, dividend or split dates, index inclusion, lock-in expiry, token unlock, a \
+                  court/regulatory decision about it), or null if none is known; and "next_macro_event_days": days until \
+                  the next market-wide event (jobs data, inflation data, central-bank meeting), or null.
                   """),
         StageSpec(id: 3, name: "Leadership & governance", tier: .balanced, webSearch: true, maxSearches: 2, maxTokens: 4000, packs: [],
                   task: """
@@ -165,7 +168,7 @@ nonisolated enum Prompts {
             .object([("anyOf", .array([.object([("type", .string(type))]), .object([("type", .string("null"))])]))])
         }
         var extra: [(String, JSONValue)] = []
-        if stage == 2 { extra = [("next_major_event_days", nullable("integer"))] }
+        if stage == 2 { extra = [("next_major_event_days", nullable("integer")), ("next_macro_event_days", nullable("integer"))] }
         if stage == 10 {
             extra = [("side", .object([("type", .string("string")), ("enum", .array([.string("long"), .string("short"), .string("none")]))])),
                      ("entry_low", nullable("number")), ("entry_high", nullable("number")), ("stop_loss", nullable("number")),

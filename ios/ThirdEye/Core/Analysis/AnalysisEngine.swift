@@ -230,6 +230,7 @@ final class AnalysisEngine {
         run?.composite = composite
         run?.verdict = verdict.rawValue
         run?.vetoes = vetoes + dataErrors.map { "Data: \($0)" }
+        run?.cautions = Scoring.cautions(stages: results, profile: profile)
         run?.plan = plan
         run?.verifierNotes = verifierNotes
         run?.totalCostUSD = runningCost

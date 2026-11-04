@@ -146,6 +146,30 @@ nonisolated struct UpstoxCandleClient: CandleSource {
         return (try await past + today).normalized()
     }
 
+    /// LTP: `{"status":"success","data":{"NSE_EQ:RELIANCE":{"last_price":..,"instrument_token":"NSE_EQ|INE…"}}}`
+    /// (shape not yet verified against a live account — falls back to the last 1-minute candle).
+    func lastPrice(_ instrument: Instrument) async throws -> Double {
+        var c = URLComponents(string: "https://api.upstox.com/v3/market-quote/ltp")!
+        c.queryItems = [URLQueryItem(name: "instrument_key", value: instrument.providerKey)]
+        var request = URLRequest(url: c.url!)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        let (data, status) = try await MarketHTTP.data(for: request)
+        if status == 401 { throw MarketDataError.loginRequired }
+        if status == 200, let p = Self.parseLTP(data, key: instrument.providerKey) { return p }
+        let candles = try await fetch("\(Self.base)/intraday/\(Self.encodedKey(instrument.providerKey))/minutes/1")
+        guard let last = candles.last else { throw MarketDataError.unsupported("No price yet today.") }
+        return last.close
+    }
+
+    static func parseLTP(_ data: Data, key: String) -> Double? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let payload = root["data"] as? [String: Any] else { return nil }
+        let entries = payload.values.compactMap { $0 as? [String: Any] }
+        let match = entries.first { ($0["instrument_token"] as? String) == key } ?? (entries.count == 1 ? entries.first : nil)
+        return (match?["last_price"] as? NSNumber)?.doubleValue
+    }
+
     private func fetch(_ urlString: String) async throws -> [Candle] {
         guard let url = URL(string: urlString) else { throw MarketDataError.unsupported("Bad instrument key") }
         var request = URLRequest(url: url)

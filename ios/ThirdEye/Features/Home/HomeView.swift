@@ -6,6 +6,8 @@ struct HomeView: View {
     @Environment(ModelCatalog.self) private var catalog
     @Environment(MarketStore.self) private var market
     @Environment(AnalysisStore.self) private var analyses
+    @Environment(TradeStore.self) private var trades
+    @State private var prices = PriceBook()
     @State private var demoScore = 712
 
     private var connectedCount: Int {
@@ -22,6 +24,27 @@ struct HomeView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .floatingGlass(in: Capsule())
+                }
+
+                let active = trades.trades.filter { $0.status == .open || $0.status == .upcoming }
+                if !active.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Your trades").font(.headline).foregroundStyle(palette.textPrimary)
+                            Spacer()
+                            Text("\(trades.trades(.open).count) open · \(trades.trades(.upcoming).count) upcoming")
+                                .font(.caption).foregroundStyle(palette.textSecondary)
+                        }
+                        ForEach(active.prefix(6)) { t in
+                            TradeRow(trade: t, price: prices.price(t.instrument))
+                        }
+                        Text("Open the Trades tab to record entries and exits.")
+                            .font(.caption2).foregroundStyle(palette.textSecondary)
+                    }
+                    .dataCard()
+                    .task(id: active.count) {
+                        await prices.refresh(Array(active.prefix(6).map(\.instrument)), market: market)
+                    }
                 }
 
                 if !analyses.runs.isEmpty {

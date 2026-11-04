@@ -27,7 +27,7 @@ cd ios && xcodegen generate && open ThirdEye.xcodeproj
 - [x] **M2 Markets (phone-first)** — Upstox login, every NSE/BSE/F&O/MCX product, US/forex/gold, crypto, search, live candlestick charts, watchlist
 - [x] **M3 Feature engine** — indicators verified against TA-Lib, support/resistance, patterns with their own hit rates, history phases, Technicals panel
 - [x] **M4 10-stage AI analysis** — Claude with web search, validated stage outputs, code-computed 0–1000 score, vetoes, trade plan with TP ladder, verifier, full report
-- [ ] M5 Trade plans, positions, journal
+- [x] **M5 Trades** — upcoming trades, entries/exits, TP tracking, position sizing, P&L journal, paper/real mode, iCloud sync
 - [ ] M6 Monitoring + alerts
 - [ ] M7 AI Recommendations
 - [ ] M8 Calibration + hardening

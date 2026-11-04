@@ -124,6 +124,7 @@ nonisolated enum StageParser {
 
         var extra: [String: String] = [:]
         if let d = number(obj["next_major_event_days"]) { extra["next_major_event_days"] = String(Int(d.rounded())) }
+        if let d = number(obj["next_macro_event_days"]) { extra["next_macro_event_days"] = String(Int(d.rounded())) }
         for key in ["side", "invalidation"] {
             if let v = obj[key] as? String { extra[key] = v }
         }

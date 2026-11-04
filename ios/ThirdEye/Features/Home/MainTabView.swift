@@ -15,12 +15,7 @@ struct MainTabView: View {
                 NavigationStack { MarketsView() }
             }
             Tab("Trades", systemImage: "list.bullet.rectangle", value: AppTab.trades) {
-                NavigationStack {
-                    ComingSoonView(title: "Trades",
-                                   systemImage: "target",
-                                   milestone: "M5",
-                                   detail: "Upcoming trades, open positions with take-profit stages, and your P&L journal.")
-                }
+                NavigationStack { TradesView() }
             }
             Tab("Settings", systemImage: "gearshape", value: AppTab.settings) {
                 NavigationStack { SettingsView() }

@@ -42,14 +42,23 @@ nonisolated enum Scoring {
             let limit: TimeInterval = timeframe.isIntraday ? 3 * 3600 : 5 * 86_400
             if age > limit { out.append("Price data is stale (last bar \(Int(age / 3600)) hours old).") }
         }
+        // Only events specific to this product block a trade (e.g. its results day). Market-wide data
+        // (jobs, inflation, central banks) happens every few days and is shown as a caution instead.
         if let s2 = stages.first(where: { $0.stage == 2 }), let d = s2.extra["next_major_event_days"].flatMap(Int.init),
            d >= 0, d <= profile.maxHoldingDays {
-            out.append("A major scheduled event falls inside the holding period (in \(d) day\(d == 1 ? "" : "s")).")
+            out.append("A product-specific event falls inside the holding period (in \(d) day\(d == 1 ? "" : "s")).")
         }
         if let plan, !plan.issues.isEmpty {
             out.append(contentsOf: plan.issues.map { "Trade plan check: \($0)" })
         }
         return out
+    }
+
+    /// Non-blocking cautions shown on the report.
+    static func cautions(stages: [StageResult], profile: HoldingProfile) -> [String] {
+        guard let s2 = stages.first(where: { $0.stage == 2 }),
+              let d = s2.extra["next_macro_event_days"].flatMap(Int.init), d >= 0, d <= min(profile.maxHoldingDays, 7) else { return [] }
+        return ["Market-wide data or a central-bank decision is due in \(d) day\(d == 1 ? "" : "s") — expect volatility."]
     }
 
     static func verdict(composite: Int, vetoes: [String]) -> Verdict {

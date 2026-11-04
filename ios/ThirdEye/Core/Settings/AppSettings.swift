@@ -12,6 +12,8 @@ final class AppSettings {
         static let tierAssignments = "settings.tierAssignments"
         static let paperMode = "settings.paperMode"
         static let hideLockScreenPnL = "settings.hideLockScreenPnL"
+        static let riskPercent = "settings.riskPercent"
+        static let capital = "settings.capitalByCurrency"
     }
 
     private let defaults: UserDefaults
@@ -38,6 +40,16 @@ final class AppSettings {
         didSet { defaults.set(hideLockScreenPnL, forKey: Keys.hideLockScreenPnL) }
     }
 
+    /// Risk per trade for position sizing (spec default 1 %, max 2 %).
+    var riskPercent: Double {
+        didSet { defaults.set(riskPercent, forKey: Keys.riskPercent) }
+    }
+
+    /// Trading capital per currency (never converted between currencies).
+    var capital: [String: Double] {
+        didSet { defaults.set(capital, forKey: Keys.capital) }
+    }
+
     var tierAssignments: [ModelTier: ModelRef] {
         didSet { saveAssignments() }
     }
@@ -50,6 +62,9 @@ final class AppSettings {
         relockSeconds = relock == 0 ? 30 : relock
         paperMode = defaults.object(forKey: Keys.paperMode) as? Bool ?? true
         hideLockScreenPnL = defaults.object(forKey: Keys.hideLockScreenPnL) as? Bool ?? false
+        let risk = defaults.double(forKey: Keys.riskPercent)
+        riskPercent = risk > 0 ? risk : 1
+        capital = defaults.dictionary(forKey: Keys.capital) as? [String: Double] ?? [:]
         if let data = defaults.data(forKey: Keys.tierAssignments),
            let decoded = try? JSONDecoder().decode([String: ModelRef].self, from: data) {
             var map: [ModelTier: ModelRef] = [:]

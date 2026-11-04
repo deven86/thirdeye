@@ -68,6 +68,21 @@ nonisolated struct BinanceClient: CandleSource {
         }
     }
 
+    /// `{"symbol":"BTCUSDT","price":"78570.01"}`
+    func lastPrice(_ instrument: Instrument) async throws -> Double {
+        var c = URLComponents(url: Self.base.appending(path: "ticker/price"), resolvingAgainstBaseURL: false)!
+        c.queryItems = [URLQueryItem(name: "symbol", value: instrument.providerKey)]
+        let (data, status) = try await MarketHTTP.data(for: URLRequest(url: c.url!))
+        guard status == 200 else { throw MarketDataError.http(status, ProviderHTTP.errorMessage(from: data)) }
+        return try Self.parsePrice(data)
+    }
+
+    static func parsePrice(_ data: Data) throws -> Double {
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let p = (obj["price"] as? String).flatMap(Double.init) else { throw MarketDataError.decoding("Binance price") }
+        return p
+    }
+
     /// `[[openTimeMs, "open", "high", "low", "close", "volume", closeTime, ...], ...]` — prices are strings.
     static func parseKlines(_ data: Data) throws -> [Candle] {
         guard let rows = try? JSONSerialization.jsonObject(with: data) as? [[Any]] else {
@@ -197,6 +212,19 @@ nonisolated struct TwelveDataClient: CandleSource {
             URLQueryItem(name: "order", value: "asc"),
         ])
         return try Self.parseSeries(data)
+    }
+
+    /// `{"price":"2650.12"}` — 1 credit.
+    func lastPrice(_ instrument: Instrument) async throws -> Double {
+        let data = try await get("price", [URLQueryItem(name: "symbol", value: instrument.providerKey)])
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw MarketDataError.decoding("Twelve Data price")
+        }
+        if obj["status"] as? String == "error" {
+            throw (obj["code"] as? Int) == 429 ? MarketDataError.rateLimited : MarketDataError.http(obj["code"] as? Int ?? 0, obj["message"] as? String ?? "")
+        }
+        guard let p = (obj["price"] as? String).flatMap(Double.init) else { throw MarketDataError.decoding("Twelve Data price") }
+        return p
     }
 
     static func parseSeries(_ data: Data) throws -> [Candle] {

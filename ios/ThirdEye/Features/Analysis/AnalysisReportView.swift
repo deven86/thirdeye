@@ -5,6 +5,7 @@ struct AnalysisReportView: View {
     @Environment(\.palette) private var palette
     @Environment(\.openURL) private var openURL
     let run: AnalysisRun
+    @State private var showNewTrade = false
 
     private var verdict: Verdict { Verdict(rawValue: run.verdict ?? "") ?? .noTrade }
     private var breakdown: [Scoring.Breakdown] { Scoring.composite(run.stages, profile: run.profile).breakdown }
@@ -14,7 +15,20 @@ struct AnalysisReportView: View {
             VStack(alignment: .leading, spacing: 16) {
                 scoreCard
                 if !run.vetoes.isEmpty { vetoCard }
-                if let plan = run.plan { PlanCard(plan: plan, tradable: verdict != .noTrade, currency: run.instrument.currency) }
+                if let cautions = run.cautions, !cautions.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Caution", systemImage: "exclamationmark.circle").font(.subheadline.weight(.semibold)).foregroundStyle(palette.textSecondary)
+                        ForEach(cautions, id: \.self) { Text($0).font(.callout).foregroundStyle(palette.textPrimary) }
+                    }
+                    .dataCard()
+                }
+                if let plan = run.plan {
+                    PlanCard(plan: plan, tradable: verdict != .noTrade, currency: run.instrument.currency)
+                    AdaptiveButton(title: "Save as upcoming trade", systemImage: "bookmark", kind: verdict == .noTrade ? .secondary : .primary) {
+                        showNewTrade = true
+                    }
+                    .sheet(isPresented: $showNewTrade) { NewTradeSheet(run: run, plan: plan) }
+                }
                 Text("Stages").font(.title3.weight(.semibold)).foregroundStyle(palette.textPrimary)
                 ForEach(run.stages) { StageCard(result: $0, weight: run.profile.weights[$0.stage - 1]) }
                 mathsCard

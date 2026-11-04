@@ -176,6 +176,7 @@ nonisolated struct AnalysisRun: Codable, Hashable, Sendable, Identifiable {
     var composite: Int?
     var verdict: String?      // Verdict rawValue
     var vetoes: [String]
+    var cautions: [String]? = nil
     var plan: TradePlan?
     var verifierNotes: [String]
     var totalCostUSD: Double

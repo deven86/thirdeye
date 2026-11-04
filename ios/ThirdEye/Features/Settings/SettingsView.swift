@@ -81,11 +81,31 @@ struct SettingsView: View {
             }
 
             Section {
-                LabeledContent("Mode", value: settings.paperMode ? "Paper trading" : "Real money")
+                Toggle(isOn: Binding(
+                    get: { !settings.paperMode },
+                    set: { wantsReal in
+                        if wantsReal {
+                            Task {
+                                if await AppLock.authenticate(reason: "Switch Third Eye to real-money mode") == .success {
+                                    settings.paperMode = false
+                                }
+                            }
+                        } else {
+                            settings.paperMode = true
+                        }
+                    })) {
+                    Label("Real-money mode", systemImage: settings.paperMode ? "doc.text" : "indianrupeesign.circle")
+                }
+                Stepper(value: $settings.riskPercent, in: 0.25...2, step: 0.25) {
+                    LabeledContent("Risk per trade", value: String(format: "%.2f%%", settings.riskPercent))
+                }
+                ForEach(settings.capital.keys.sorted(), id: \.self) { cur in
+                    LabeledContent("Capital (\(cur))", value: money(settings.capital[cur] ?? 0, cur))
+                }
             } header: {
-                Text("Trading mode")
+                Text("Trading")
             } footer: {
-                Text("Paper mode stays on until trade tracking arrives in M5. Switching to real money will require Face ID.")
+                Text("New trades are recorded as \(settings.paperMode ? "paper" : "REAL MONEY") trades. Switching to real money needs Face ID. Risk is capped at 2% per trade. Capital is set when you size your first trade in each currency.")
             }
 
             Section("About") {

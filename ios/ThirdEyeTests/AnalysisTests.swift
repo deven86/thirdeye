@@ -185,10 +185,14 @@ struct ScoringTests {
         var stages = (1...10).map { stage($0, 80) }
         stages[1] = stage(2, 80, extra: ["next_major_event_days": "3"])
         let v = Scoring.vetoes(stages: stages, plan: nil, lastCandleAge: 60, timeframe: .d1, profile: .swing)
-        #expect(v.contains { $0.contains("major scheduled event") })
+        #expect(v.contains { $0.contains("product-specific event") })
         let late = Scoring.vetoes(stages: [stage(2, 80, extra: ["next_major_event_days": "90"])] + (3...10).map { stage($0, 80) } + [stage(1, 80)],
                                   plan: nil, lastCandleAge: 60, timeframe: .d1, profile: .swing)
-        #expect(!late.contains { $0.contains("major scheduled event") })
+        #expect(!late.contains { $0.contains("product-specific event") })
+        // Macro data never blocks; it becomes a caution.
+        let macro = (1...10).map { $0 == 2 ? stage(2, 80, extra: ["next_macro_event_days": "2"]) : stage($0, 80) }
+        #expect(!Scoring.vetoes(stages: macro, plan: nil, lastCandleAge: 60, timeframe: .d1, profile: .swing).contains { $0.contains("event") })
+        #expect(Scoring.cautions(stages: macro, profile: .swing).count == 1)
     }
 
     @Test func staleDataVetoes() {

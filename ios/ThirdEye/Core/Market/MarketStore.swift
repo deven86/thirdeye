@@ -150,6 +150,22 @@ final class MarketStore {
         }
     }
 
+    /// Latest traded price (cheap single-quote endpoints).
+    func lastPrice(_ instrument: Instrument) async throws -> Double {
+        switch instrument.provider {
+        case .binance:
+            return try await BinanceClient().lastPrice(instrument)
+        case .twelveData:
+            guard let key = try syncedKeychain.get(Account.twelveDataKey.rawValue) else {
+                throw MarketDataError.notConfigured("Twelve Data")
+            }
+            return try await TwelveDataClient(apiKey: key).lastPrice(instrument)
+        case .upstox:
+            guard hasUpstoxKeys else { throw MarketDataError.notConfigured("Upstox") }
+            return try await UpstoxCandleClient(accessToken: try validUpstoxToken()).lastPrice(instrument)
+        }
+    }
+
     // MARK: Instrument universe
 
     /// Loads cached lists instantly, then refreshes stale ones in the background.
