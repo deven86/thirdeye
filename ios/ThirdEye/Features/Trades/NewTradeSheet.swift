@@ -1,13 +1,35 @@
 import SwiftUI
 
-/// Turns an analysis plan into an "Upcoming trade", with position sizing.
+/// Creates an "Upcoming trade" from an analysis plan or the user's own plan, with position sizing.
 struct NewTradeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @Environment(AppSettings.self) private var settings
     @Environment(TradeStore.self) private var store
-    let run: AnalysisRun
-    let plan: TradePlan
+    let instrument: Instrument
+    /// The analysis this came from (nil = the user's own idea).
+    let run: AnalysisRun?
+    /// The AI's plan, if it gave one; otherwise the user fills the levels in.
+    let plan: TradePlan?
+    /// Price to start from (and to sanity-check levels against).
+    let referencePrice: Double?
+
+    init(run: AnalysisRun, plan: TradePlan?) {
+        instrument = run.instrument
+        self.run = run
+        self.plan = plan
+        referencePrice = run.lastPrice
+    }
+
+    init(instrument: Instrument, referencePrice: Double?) {
+        self.instrument = instrument
+        run = nil
+        plan = nil
+        self.referencePrice = referencePrice
+    }
+
+    @State private var side = "long"
+    @State private var holdingDays = "30"
 
     @State private var entryLow = ""
     @State private var entryHigh = ""
@@ -18,34 +40,50 @@ struct NewTradeSheet: View {
     @State private var stages = 5
     @State private var notes = ""
 
-    private var verdict: Verdict { Verdict(rawValue: run.verdict ?? "") ?? .noTrade }
-    private var currency: String { run.instrument.currency }
+    private var verdict: Verdict? { run.flatMap { Verdict(rawValue: $0.verdict ?? "") } }
+    private var currency: String { instrument.currency }
+    /// Tracked without (or against) an AI recommendation.
+    private var againstVerdict: Bool { plan == nil || verdict == .noTrade }
 
     private func num(_ s: String) -> Double? { Double(s.replacingOccurrences(of: ",", with: "")) }
 
     private var preview: TradePlan? {
-        guard let lo = num(entryLow), let hi = num(entryHigh), let sl = num(stop), let price = run.lastPrice else { return nil }
-        return TradePlanner.build(.init(side: plan.side, entryLow: lo, entryHigh: hi, stopLoss: sl, holdingDays: plan.holdingDays,
-                                        invalidation: plan.invalidation, rationale: plan.rationale),
-                                  lastPrice: price, atr: nil, tick: run.instrument.tickSize, stages: stages)
+        guard let lo = num(entryLow), let hi = num(entryHigh), let sl = num(stop) else { return nil }
+        let days = Int(num(holdingDays) ?? 30)
+        return TradePlanner.build(.init(side: plan?.side ?? side, entryLow: lo, entryHigh: hi, stopLoss: sl,
+                                        holdingDays: plan?.holdingDays ?? days,
+                                        invalidation: plan?.invalidation ?? "", rationale: plan?.rationale ?? "Own plan"),
+                                  lastPrice: referencePrice ?? (lo + hi) / 2, atr: nil, tick: instrument.tickSize, stages: stages)
     }
 
     private var suggestedQuantity: Double {
         guard let p = preview, let c = num(capital), let r = num(riskPercent) else { return 0 }
-        return TradeMath.positionSize(capital: c, riskPercent: r, entry: p.entryMid, stop: p.stopLoss, lotSize: run.instrument.lotSize)
+        return TradeMath.positionSize(capital: c, riskPercent: r, entry: p.entryMid, stop: p.stopLoss, lotSize: instrument.lotSize)
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                if verdict == .noTrade {
+                if againstVerdict {
                     Section {
-                        Label("The analysis verdict was No trade. You can still track this idea; it will be marked “against verdict” in your journal.",
+                        Label(run == nil ? "Your own plan, not an AI recommendation. It will be marked “own idea” in your journal."
+                                         : "The analysis did not recommend this trade. It will be marked “against verdict” in your journal.",
                               systemImage: "exclamationmark.triangle")
                             .font(.callout).foregroundStyle(palette.warning)
                     }
                 }
-                Section("Levels (\(plan.side.uppercased()) · \(currency))") {
+                if plan == nil {
+                    Section {
+                        Picker("Direction", selection: $side) {
+                            Text("Long (buy)").tag("long")
+                            Text("Short (sell)").tag("short")
+                        }
+                        .pickerStyle(.segmented)
+                        field("Holding days", $holdingDays)
+                        if let referencePrice { LabeledContent("Price now", value: plainPrice(referencePrice)) }
+                    }
+                }
+                Section("Levels (\((plan?.side ?? side).uppercased()) · \(currency))") {
                     field("Entry from", $entryLow)
                     field("Entry to", $entryHigh)
                     field("Stop-loss", $stop)
@@ -72,17 +110,17 @@ struct NewTradeSheet: View {
                 } header: {
                     Text("Position size")
                 } footer: {
-                    Text("Suggested quantity loses \(riskPercent.isEmpty ? "—" : riskPercent)% of capital if the stop is hit\(run.instrument.lotSize.map { $0 > 1 ? ", rounded down to lots of \(Int($0))" : "" } ?? "").")
+                    Text("Suggested quantity loses \(riskPercent.isEmpty ? "—" : riskPercent)% of capital if the stop is hit\(instrument.lotSize.map { $0 > 1 ? ", rounded down to lots of \(Int($0))" : "" } ?? "").")
                 }
                 Section("Notes") {
                     TextField("Why you are taking it", text: $notes, axis: .vertical)
                 }
                 Section {
                     LabeledContent("Mode", value: settings.paperMode ? "Paper" : "Real money")
-                    LabeledContent("Complete by", value: plan.completeBy.formatted(date: .abbreviated, time: .omitted))
+                    if let p = preview { LabeledContent("Complete by", value: p.completeBy.formatted(date: .abbreviated, time: .omitted)) }
                 }
             }
-            .navigationTitle("New upcoming trade")
+            .navigationTitle(plan == nil ? "Track a trade" : "New upcoming trade")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -92,6 +130,7 @@ struct NewTradeSheet: View {
                 }
             }
             .onAppear(perform: prefill)
+            .onChange(of: side) { _, _ in if plan == nil { prefill() } }
             .onChange(of: suggestedQuantity) { _, q in if quantity.isEmpty || num(quantity) == 0 { quantity = q > 0 ? q.formatted(.number.grouping(.never)) : "" } }
         }
     }
@@ -111,23 +150,35 @@ struct NewTradeSheet: View {
 
     private func prefill() {
         let plain = { (v: Double) in v.formatted(.number.grouping(.never).precision(.fractionLength(0...6))) }
-        entryLow = plain(plan.entryLow)
-        entryHigh = plain(plan.entryHigh)
-        stop = plain(plan.stopLoss)
-        stages = plan.takeProfits.count == 3 ? 3 : 5
+        if let plan {
+            entryLow = plain(plan.entryLow)
+            entryHigh = plain(plan.entryHigh)
+            stop = plain(plan.stopLoss)
+            stages = plan.takeProfits.count == 3 ? 3 : 5
+        } else if let p = referencePrice {
+            // Starting point only: a narrow zone around the price and a 3 % stop. Adjust to your own levels.
+            entryLow = plain(roundTo(p * 0.998))
+            entryHigh = plain(roundTo(p * 1.002))
+            stop = plain(roundTo(side == "long" ? p * 0.97 : p * 1.03))
+        }
         riskPercent = plain(settings.riskPercent)
         if let c = settings.capital[currency], c > 0 { capital = plain(c) }
+    }
+
+    private func roundTo(_ v: Double) -> Double {
+        let m = pow(10, Double(v < 10 ? 4 : 2))
+        return (v * m).rounded() / m
     }
 
     private func save() {
         guard let p = preview, let q = num(quantity), q > 0 else { return }
         if let c = num(capital), c > 0 { settings.capital[currency] = c }
         if let r = num(riskPercent), r > 0 { settings.riskPercent = r }
-        let trade = Trade(instrument: run.instrument, analysisID: run.id, analysisScore: run.composite, analysisVerdict: run.verdict,
+        let trade = Trade(instrument: instrument, analysisID: run?.id, analysisScore: run?.composite, analysisVerdict: run?.verdict,
                           mode: settings.paperMode ? .paper : .real, side: p.side, status: .upcoming,
                           plannedEntryLow: p.entryLow, plannedEntryHigh: p.entryHigh, stopLoss: p.stopLoss, initialStop: p.stopLoss,
-                          takeProfits: p.takeProfits, plannedQuantity: q, badge: plan.badge, completeBy: plan.completeBy,
-                          notes: notes, againstVerdict: verdict == .noTrade)
+                          takeProfits: p.takeProfits, plannedQuantity: q, badge: p.badge, completeBy: p.completeBy,
+                          notes: notes, againstVerdict: againstVerdict)
         store.save(trade)
         dismiss()
     }

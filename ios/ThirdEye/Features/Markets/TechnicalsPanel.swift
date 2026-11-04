@@ -27,7 +27,7 @@ struct TechnicalsPanel: View {
                     if category != FeatureEngine.Category.allCases.last { Divider() }
                 }
             }
-            Text("Calculated on this device from \(snapshot.bars) bars. Not advice — the AI score arrives in Milestone 4.")
+            Text("Calculated on this device from \(snapshot.bars) bars. Not advice. Tap “Analyse with AI” for the full 10-stage score.")
                 .font(.caption2)
                 .foregroundStyle(palette.textSecondary)
         }

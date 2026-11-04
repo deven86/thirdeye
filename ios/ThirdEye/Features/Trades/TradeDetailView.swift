@@ -33,7 +33,7 @@ struct TradeDetailView: View {
                     Text(t.side.uppercased()).font(.headline).foregroundStyle(t.isLong ? palette.up : palette.down)
                     Chip(text: t.badge.title, color: palette.accent)
                     Chip(text: t.mode.title, color: t.mode == .real ? palette.warning : palette.neutral)
-                    if t.againstVerdict { Chip(text: "Against verdict", color: palette.warning) }
+                    if t.againstVerdict { Chip(text: t.analysisID == nil ? "Own idea" : "Against verdict", color: palette.warning) }
                     Spacer()
                     SignalLabel(signal: TradeMath.signal(t, lastPrice: price), trade: t)
                 }

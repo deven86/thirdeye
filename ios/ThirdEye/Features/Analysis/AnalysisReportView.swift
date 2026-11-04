@@ -28,6 +28,16 @@ struct AnalysisReportView: View {
                         showNewTrade = true
                     }
                     .sheet(isPresented: $showNewTrade) { NewTradeSheet(run: run, plan: plan) }
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("No trade plan").font(.headline).foregroundStyle(palette.textPrimary)
+                        Text("The final stage found no sound entry and stop, so it did not propose a trade. Waiting is a valid decision.")
+                            .font(.callout).foregroundStyle(palette.textSecondary)
+                        Button("Create my own plan anyway") { showNewTrade = true }
+                            .font(.callout.weight(.semibold))
+                    }
+                    .dataCard()
+                    .sheet(isPresented: $showNewTrade) { NewTradeSheet(run: run, plan: nil) }
                 }
                 Text("Stages").font(.title3.weight(.semibold)).foregroundStyle(palette.textPrimary)
                 ForEach(run.stages) { StageCard(result: $0, weight: run.profile.weights[$0.stage - 1]) }

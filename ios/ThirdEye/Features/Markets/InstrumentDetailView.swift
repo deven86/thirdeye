@@ -16,6 +16,7 @@ struct InstrumentDetailView: View {
     @State private var showLogin = false
     @State private var snapshot: FeatureEngine.Snapshot?
     @State private var showAnalyse = false
+    @State private var showTrack = false
 
     private var displayTimeZone: TimeZone {
         instrument.provider == .upstox ? TimeZone(identifier: "Asia/Kolkata")! : .current
@@ -50,6 +51,7 @@ struct InstrumentDetailView: View {
                 }
                 detailsCard
                 AdaptiveButton(title: "Analyse with AI", systemImage: "sparkles", kind: .primary) { showAnalyse = true }
+                AdaptiveButton(title: "Track a trade", systemImage: "bookmark", kind: .secondary) { showTrack = true }
                 pastAnalyses
             }
             .padding()
@@ -79,6 +81,7 @@ struct InstrumentDetailView: View {
         }
         .sheet(isPresented: $showLogin) { UpstoxLoginSheet() }
         .sheet(isPresented: $showAnalyse) { AnalyseSheet(instrument: instrument) }
+        .sheet(isPresented: $showTrack) { NewTradeSheet(instrument: instrument, referencePrice: candles.last?.close) }
         .task(id: candles.last.map { "\($0.time.timeIntervalSince1970)|\($0.close)|\(candles.count)|\(timeframe.rawValue)" } ?? "none") {
             let bars = candles
             let tf = timeframe

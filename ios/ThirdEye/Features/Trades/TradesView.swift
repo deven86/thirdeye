@@ -7,6 +7,7 @@ struct TradesView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var prices = PriceBook()
     @State private var tab: TradeStatus = .open
+    @State private var pickInstrument = false
 
     private var visible: [Trade] {
         tab == .closed ? store.trades.filter { $0.status == .closed || $0.status == .cancelled }.sorted { ($0.closedAt ?? $0.updatedAt) > ($1.closedAt ?? $1.updatedAt) }
@@ -38,6 +39,12 @@ struct TradesView: View {
             }
         }
         .navigationTitle("Trades")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { pickInstrument = true } label: { Label("Add trade", systemImage: "plus") }
+            }
+        }
+        .sheet(isPresented: $pickInstrument) { WatchlistPicker() }
         .navigationDestination(for: UUID.self) { id in
             if let t = store.trade(id: id) { TradeDetailView(tradeID: t.id, prices: prices) }
         }
@@ -61,7 +68,7 @@ struct TradesView: View {
     private var emptyText: String {
         switch tab {
         case .upcoming: "Run an analysis, then tap “Save as upcoming trade” on its plan."
-        case .open: "When price reaches an upcoming trade's entry zone and you buy, tap “I entered”."
+        case .open: "Tap + to track a trade, or save one from an analysis. When you buy, open it and tap “I entered”."
         default: "Closed trades and their profit or loss appear here."
         }
     }
@@ -176,4 +183,33 @@ func money(_ v: Double, _ currency: String, signed: Bool = false) -> String {
 
 func plainPrice(_ v: Double) -> String {
     v.formatted(.number.precision(.fractionLength(v < 10 ? 4 : 2)))
+}
+
+/// Pick a product from the watchlist, then fill in your own plan.
+private struct WatchlistPicker: View {
+    @Environment(MarketStore.self) private var market
+    @Environment(\.dismiss) private var dismiss
+    @State private var chosen: Instrument?
+    @State private var price: Double?
+
+    var body: some View {
+        NavigationStack {
+            List(market.watchlist) { i in
+                Button {
+                    Task {
+                        price = try? await market.lastPrice(i)
+                        chosen = i
+                    }
+                } label: { InstrumentRow(instrument: i) }
+            }
+            .navigationTitle("Choose a product")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .sheet(item: $chosen, onDismiss: { dismiss() }) { i in NewTradeSheet(instrument: i, referencePrice: price) }
+            .safeAreaInset(edge: .bottom) {
+                Text("Not in your watchlist? Open it in Markets and tap “Track a trade”.")
+                    .font(.caption).foregroundStyle(.secondary).padding()
+            }
+        }
+    }
 }
