@@ -124,8 +124,12 @@ struct StructureTests {
 
     @Test func drawdownAndRegimes() throws {
         // 100 → 200 (bull) → 120 (bear, −40 %) → 180 (bull)
-        let path: [Double] = (0...10).map { 100 + Double($0) * 10 } + (1...8).map { 200 - Double($0) * 10 } + (1...6).map { 120 + Double($0) * 10 }
-        let c = path.enumerated().map { bar($0.offset, $0.element, $0.element + 1, $0.element - 1, $0.element) }
+        let up1: [Double] = (0...10).map { Double(100 + $0 * 10) }
+        let down: [Double] = (1...8).map { Double(200 - $0 * 10) }
+        let up2: [Double] = (1...6).map { Double(120 + $0 * 10) }
+        let path: [Double] = up1 + down + up2
+        var c: [Candle] = []
+        for (i, p) in path.enumerated() { c.append(bar(i, p, p + 1, p - 1, p)) }
         let dd = try #require(History.maxDrawdown(c))
         #expect(abs(dd.percent - (-40)) < 1e-9)
         #expect(dd.recovered == nil)
