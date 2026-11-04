@@ -27,12 +27,12 @@ nonisolated enum HotMarket: String, CaseIterable, Identifiable, Codable, Sendabl
     /// Indian cash shares can only be shorted intraday, so swing scans there are long-only.
     var allowsShorts: Bool { self == .crypto || self == .forexMetals }
 
-    static let us = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "JPM", "V", "MA", "UNH", "XOM", "JNJ", "PG", "HD",
+    static let usSymbols = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "JPM", "V", "MA", "UNH", "XOM", "JNJ", "PG", "HD",
                      "COST", "AVGO", "LLY", "ORCL", "NFLX", "AMD", "CRM", "ADBE", "PEP", "KO", "WMT", "BAC", "DIS", "INTC", "CSCO"]
-    static let fx = ["XAU/USD", "XAG/USD", "EUR/USD", "GBP/USD", "USD/JPY", "USD/INR", "AUD/USD", "USD/CHF", "USD/CAD",
+    static let fxSymbols = ["XAU/USD", "XAG/USD", "EUR/USD", "GBP/USD", "USD/JPY", "USD/INR", "AUD/USD", "USD/CHF", "USD/CAD",
                      "NZD/USD", "EUR/JPY", "GBP/JPY"]
     /// Large, liquid NSE names (curated; not an official index list — symbols not found are skipped).
-    static let india = ["RELIANCE", "HDFCBANK", "ICICIBANK", "INFY", "TCS", "BHARTIARTL", "ITC", "LT", "SBIN", "KOTAKBANK",
+    static let indiaSymbols = ["RELIANCE", "HDFCBANK", "ICICIBANK", "INFY", "TCS", "BHARTIARTL", "ITC", "LT", "SBIN", "KOTAKBANK",
                         "AXISBANK", "HINDUNILVR", "BAJFINANCE", "MARUTI", "SUNPHARMA", "M&M", "HCLTECH", "TITAN", "ULTRACEMCO",
                         "NTPC", "POWERGRID", "ASIANPAINT", "NESTLEIND", "ONGC", "COALINDIA", "ADANIENT", "ADANIPORTS",
                         "BAJAJFINSV", "WIPRO", "TECHM", "JSWSTEEL", "TATASTEEL", "GRASIM", "HINDALCO", "CIPLA", "DRREDDY",
@@ -141,10 +141,10 @@ final class HotTradesEngine {
         case .crypto:
             return (try await BinanceClient().topByVolume(limit: 30), [])
         case .usStocks:
-            return (HotMarket.us.map { Instrument(id: "twelve:\($0)", provider: .twelveData, symbol: $0, name: $0,
+            return (HotMarket.usSymbols.map { Instrument(id: "twelve:\($0)", provider: .twelveData, symbol: $0, name: $0,
                                                   exchange: "US", segment: "EQUITY", kind: .equity, currency: "USD") }, [])
         case .forexMetals:
-            return (HotMarket.fx.map { s in
+            return (HotMarket.fxSymbols.map { s in
                 let metal = s.hasPrefix("XAU") || s.hasPrefix("XAG")
                 return Instrument(id: "twelve:\(s)", provider: .twelveData, symbol: s, name: s, exchange: "FX",
                                   segment: "FOREX", kind: metal ? .commodity : .forex,
@@ -154,7 +154,7 @@ final class HotTradesEngine {
             await store.loadUniverse()
             var found: [Instrument] = []
             var missing: [String] = []
-            for sym in HotMarket.india {
+            for sym in HotMarket.indiaSymbols {
                 if let i = store.index.search(sym, filter: .indiaStocks, limit: 5)
                     .first(where: { $0.symbol.caseInsensitiveCompare(sym) == .orderedSame && $0.exchange == "NSE" }) {
                     found.append(i)
