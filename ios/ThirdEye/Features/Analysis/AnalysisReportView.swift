@@ -24,15 +24,7 @@ struct AnalysisReportView: View {
                     vetoCard
                 }
                 if verdict == .noTrade, let levels = run.watchLevels, !levels.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label(run.lean == nil ? "Levels to watch" : "On watch — leaning \(run.lean == "short" ? "short" : "long")",
-                              systemImage: "binoculars")
-                            .font(.subheadline.weight(.semibold)).foregroundStyle(palette.accent)
-                        ForEach(levels, id: \.self) { Text($0).font(.callout).foregroundStyle(palette.textPrimary) }
-                        Text("A close beyond a level is a reason to re-run the analysis, not a trade by itself.")
-                            .font(.caption2).foregroundStyle(palette.textSecondary)
-                    }
-                    .dataCard()
+                    watchCard(levels)
                 }
                 if let cautions = run.cautions, !cautions.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
@@ -107,6 +99,18 @@ struct AnalysisReportView: View {
                 .font(.headline)
                 .foregroundStyle(palette.warning)
             ForEach(run.vetoes, id: \.self) { Text("• \($0)").font(.callout).foregroundStyle(palette.textPrimary) }
+        }
+        .dataCard()
+    }
+
+    private func watchCard(_ levels: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(run.lean == nil ? "Levels to watch" : "On watch — leaning \(run.lean == "short" ? "short" : "long")",
+                  systemImage: "binoculars")
+                .font(.subheadline.weight(.semibold)).foregroundStyle(palette.accent)
+            ForEach(levels, id: \.self) { Text($0).font(.callout).foregroundStyle(palette.textPrimary) }
+            Text("A close beyond a level is a reason to re-run the analysis, not a trade by itself.")
+                .font(.caption2).foregroundStyle(palette.textSecondary)
         }
         .dataCard()
     }

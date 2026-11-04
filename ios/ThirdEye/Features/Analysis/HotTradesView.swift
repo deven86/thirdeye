@@ -139,13 +139,39 @@ struct HotTradesView: View {
 
     @ViewBuilder
     private func contextSection(_ scan: HotScan) -> some View {
-        if scan.regime != nil || scan.shortlistNote != nil || !scan.skipped.isEmpty {
+        if scan.regime != nil || scan.shortlistNote != nil || !scan.skipped.isEmpty || !scan.screened.isEmpty {
             Section("Scan details") {
                 if let regime = scan.regime {
                     Label(regime, systemImage: "globe").font(.caption).foregroundStyle(palette.textSecondary)
                 }
                 if let note = scan.shortlistNote {
                     Label(note, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(palette.warning)
+                }
+                if !scan.screened.isEmpty {
+                    DisclosureGroup("Chart screen — top \(min(scan.screened.count, 15)) of \(scan.screened.count)") {
+                        ForEach(Array(scan.screened.prefix(15).enumerated()), id: \.element.id) { i, row in
+                            HStack(spacing: 8) {
+                                Text("\(i + 1).").font(.caption2.monospacedDigit()).foregroundStyle(palette.textSecondary).frame(width: 22, alignment: .trailing)
+                                Image(systemName: row.direction == "long" ? "arrow.up.right" : "arrow.down.right")
+                                    .font(.caption2).foregroundStyle(row.direction == "long" ? palette.up : palette.down)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(row.instrument.symbol).font(.caption.weight(.semibold))
+                                    if let t = row.trend { Text(t).font(.caption2).foregroundStyle(palette.textSecondary) }
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 1) {
+                                    Text(String(format: "%.0f", row.codeScore)).font(.caption.monospacedDigit())
+                                    if let rs = row.relativeStrength {
+                                        Text(String(format: "RS %+.1f", rs)).font(.caption2.monospacedDigit())
+                                            .foregroundStyle(rs >= 0 ? palette.up : palette.down)
+                                    }
+                                }
+                            }
+                        }
+                        Text("Chart score ranks clean, liquid candidates for the AI — it is not a forecast. RS = 20-day return vs the list's median.")
+                            .font(.caption2).foregroundStyle(palette.textSecondary)
+                    }
+                    .font(.caption)
                 }
                 if !scan.skipped.isEmpty {
                     DisclosureGroup("Skipped (\(scan.skipped.count))") {
