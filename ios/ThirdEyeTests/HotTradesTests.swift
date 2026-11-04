@@ -62,6 +62,13 @@ struct HotTradesTests {
         #expect(HotScreener.ineligibility(pegged, minimumBars: 400, checkPeg: false) == nil, "forex is never treated as pegged")
     }
 
+    @Test func shortsFollowMarketAndStyle() {
+        #expect(HotMarket.crypto.allowsShorts(.swing))
+        #expect(!HotMarket.india.allowsShorts(.swing), "no overnight shorts in Indian cash shares")
+        #expect(HotMarket.india.allowsShorts(.scalpIntraday))
+        #expect(!HotMarket.usStocks.allowsShorts(.swing))
+    }
+
     @Test func aiSymbolsMatchLeniently() {
         let rows = ["PEPE", "ADA", "BTC"].map { ScreenRow(instrument: inst($0), direction: "long", codeScore: 1, summary: "") }
         #expect(HotScreener.match("PEPE/USDT", in: rows)?.instrument.name == "PEPE")

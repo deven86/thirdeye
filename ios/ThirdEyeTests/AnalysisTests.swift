@@ -204,8 +204,9 @@ struct ScoringTests {
         Instrument(id: "NSE_EQ|INE002A01018", provider: .upstox, symbol: "RELIANCE", name: "Reliance", exchange: "NSE",
                    segment: "NSE_EQ", kind: .equity, currency: "INR")
     }
+    /// Stage 2 answered the event question ("none known") unless a test says otherwise.
     func swingStages(_ scores: [Int], _ confs: [Double]) -> [StageResult] {
-        (1...10).map { stage($0, scores[$0 - 1], conf: confs[$0 - 1]) }
+        (1...10).map { stage($0, scores[$0 - 1], conf: confs[$0 - 1], extra: $0 == 2 ? ["next_major_event_checked": "1"] : [:]) }
     }
     func plan(_ side: String) -> TradePlan {
         side == "long"
@@ -298,6 +299,50 @@ struct ScoringTests {
         #expect(Scoring.evaluate(stages: flat, plan: nil, lastCandleAge: 60, profile: .swing, instrument: crypto).lean == nil)
     }
 
+    @Test func zeroWeightStagesStillCountAsCompleted() {
+        // Scalp weights stages 3 and 4 at 0; with stages 1, 5, 7 failed, 7 stages still finished.
+        var stages = swingStages(Array(repeating: 70, count: 10), Array(repeating: 0.7, count: 10))
+        for i in [0, 4, 6] { stages[i].status = .unavailable }
+        let e = Scoring.evaluate(stages: stages, plan: plan("long"), lastCandleAge: 60, profile: .scalpIntraday, instrument: crypto)
+        #expect(e.consensus.completed == 7)
+        #expect(e.checks.first { $0.id == "stages" }?.passed == true)
+        #expect(e.verdict == .buy)
+    }
+
+    @Test func longHoldsBlockOnlyNearEvents() {
+        var stages = swingStages(Array(repeating: 70, count: 10), Array(repeating: 0.7, count: 10))
+        stages[1].extra = ["next_major_event_checked": "1", "next_major_event_days": "70"]
+        let far = Scoring.evaluate(stages: stages, plan: nil, lastCandleAge: 60, profile: .positional, instrument: crypto)
+        #expect(far.checks.first { $0.id == "event" }?.passed == true, "results in 70 days don't block a 4-month hold")
+        #expect(far.checks.first { $0.id == "event" }?.detail.contains("inside the holding period") == true)
+        stages[1].extra = ["next_major_event_checked": "1", "next_major_event_days": "10"]
+        let near = Scoring.evaluate(stages: stages, plan: nil, lastCandleAge: 60, profile: .positional, instrument: crypto)
+        #expect(near.checks.first { $0.id == "event" }?.passed == false)
+        stages[1].extra = [:]
+        let silent = Scoring.evaluate(stages: stages, plan: nil, lastCandleAge: 60, profile: .swing, instrument: crypto)
+        #expect(silent.checks.first { $0.id == "event" }.map { !$0.passed && !$0.blocking } == true, "unanswered ≠ none found")
+    }
+
+    @Test func neutralScoreHasNoDirection() {
+        let stages = swingStages(Array(repeating: 50, count: 10), Array(repeating: 0.6, count: 10))
+        let e = Scoring.evaluate(stages: stages, plan: plan("long"), lastCandleAge: 60, profile: .swing, instrument: nseShare)
+        #expect(e.composite == 500)
+        #expect(!e.checks.contains { $0.id == "short" }, "no 'can't short' advice when nothing points down")
+        #expect(e.checks.first { $0.id == "agreement" }?.detail.hasPrefix("balanced") == true)
+        #expect(e.checks.first { $0.id == "plan" }?.detail.contains("no clear direction") == true)
+        #expect(e.lean == nil)
+    }
+
+    @Test func gradesAreSymmetric() {
+        let bear = Scoring.evaluate(stages: swingStages(Array(repeating: 26, count: 10), Array(repeating: 0.7, count: 10)),
+                                    plan: plan("short"), lastCandleAge: 60, profile: .swing, instrument: crypto)
+        let bull = Scoring.evaluate(stages: swingStages(Array(repeating: 74, count: 10), Array(repeating: 0.7, count: 10)),
+                                    plan: plan("long"), lastCandleAge: 60, profile: .swing, instrument: crypto)
+        #expect(bear.composite == 260 && bull.composite == 740)
+        #expect(bear.verdict == .sell && bull.verdict == .buy)
+        #expect(bear.grade == bull.grade)
+    }
+
     @Test func watchLevelsNameTheNearestZones() {
         let zones = [
             Levels.Zone(kind: .resistance, price: 110, low: 109, high: 111, touches: 3, lastTouch: 10),
@@ -310,6 +355,9 @@ struct ScoringTests {
         #expect(long[1].contains("below 95.00"))
         let short = Scoring.watchLevels(zones: zones, lastPrice: 100, lean: "short", currency: "USD")
         #expect(short[0].contains("below 95.00"))
+        let longOnly = Scoring.watchLevels(zones: zones, lastPrice: 100, lean: "short", currency: "INR", includeShort: false)
+        #expect(longOnly[0].contains("above 105.00"))
+        #expect(longOnly[1].hasPrefix("The long case weakens"))
     }
 
     @Test func eventInsideHoldingWindowVetoes() {

@@ -37,7 +37,7 @@ struct HotTradesView: View {
                     Button("Stop", role: .destructive) { engine.cancel() }
                 }
             } footer: {
-                Text("1) Code screens the list on its charts (free) and drops new listings and pegged coins. 2) A fast AI model shortlists \(settings.hotCandidates). 3) Each gets the full 10-stage analysis and every check. Estimated ≈ $\(estimate) per scan. HOT = passed every check; WATCH = leans clearly one way but failed a check.")
+                Text("1) Code screens the list on its charts (free) and drops new listings and pegged coins. 2) A fast AI model shortlists \(settings.hotCandidates). 3) Each gets the full 10-stage analysis and every check. Estimated ≈ $\(estimate) per scan. HOT = passed every blocking check; WATCH = leans clearly one way but failed one.")
             }
 
             if engine.phase != .idle { progressSection }
@@ -115,8 +115,8 @@ struct HotTradesView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("No hot trades right now").font(.headline)
                     Text(scan.watchList.isEmpty
-                         ? "The strongest candidates were analysed in full and none passed every check. Waiting is a valid decision — run again later or try another market."
-                         : "None passed every check. \(scan.watchList.count) \(scan.watchList.count == 1 ? "leans" : "lean") clearly one way — they are on WATCH with the levels that would strengthen the case.")
+                         ? "The strongest candidates were analysed in full and none passed every blocking check. Waiting is a valid decision — run again later or try another market."
+                         : "None passed every blocking check. \(scan.watchList.count) \(scan.watchList.count == 1 ? "leans" : "lean") clearly one way — they are on WATCH with the levels that would strengthen the case.")
                         .font(.callout).foregroundStyle(palette.textSecondary)
                 }
             }
@@ -203,7 +203,7 @@ struct HotTradesView: View {
                 if let error = pick.error {
                     Text(error).font(.caption2).foregroundStyle(palette.warning).lineLimit(3)
                 } else if pick.status == .hot, let grade = pick.grade {
-                    Text("Grade \(grade) · passed every check").font(.caption2).foregroundStyle(palette.up)
+                    Text("Grade \(grade) · passed every blocking check").font(.caption2).foregroundStyle(palette.up)
                 } else if let blocker = pick.blocker {
                     Text(blocker).font(.caption2).foregroundStyle(palette.textSecondary).lineLimit(3)
                 }

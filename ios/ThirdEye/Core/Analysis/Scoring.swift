@@ -90,7 +90,7 @@ nonisolated enum Scoring {
             doneWeight > 0 ? done.filter { test($0.score) }.reduce(0) { $0 + weight($1, profile) } / doneWeight : 0
         }
         let long = side != "short"
-        return Consensus(completed: done.count, evidence: evidence,
+        return Consensus(completed: stages.filter { $0.status == .done }.count, evidence: evidence,
                          support: share { long ? $0 >= 55 : $0 <= 45 },
                          opposition: share { long ? $0 <= 45 : $0 >= 55 })
     }
@@ -120,9 +120,12 @@ nonisolated enum Scoring {
                          profile: HoldingProfile, instrument: Instrument) -> Evaluation {
         let c = composite(stages, profile: profile).value
         let band = Verdict(composite: c)
-        let side = c >= 505 ? "long" : "short"
+        let side = c >= 500 ? "long" : "short"
         let way = side == "long" ? "up" : "down"
+        // Near 500 the number has no direction; say so instead of calling it "up" or "down".
+        let balanced = band == .noTrade && abs(c - 500) < 30
         let cons = consensus(stages, profile: profile, side: side)
+        let (up, down) = side == "long" ? (cons.support, cons.opposition) : (cons.opposition, cons.support)
         var checks: [ScoreCheck] = []
 
         checks.append(ScoreCheck(id: "score", title: "Score",
@@ -134,8 +137,10 @@ nonisolated enum Scoring {
                                  detail: "\(percent(cons.evidence)) (needs \(percent(minimumEvidence)))",
                                  passed: cons.evidence >= minimumEvidence))
         checks.append(ScoreCheck(id: "agreement", title: "Agreement",
-                                 detail: "\(percent(cons.support)) of the analysis points \(way), \(percent(cons.opposition)) against (needs ≥ 50% and ≤ 30%)",
-                                 passed: cons.support >= minimumSupport && cons.opposition <= maximumOpposition))
+                                 detail: balanced
+                                    ? "balanced — \(percent(up)) of the analysis points up, \(percent(down)) down"
+                                    : "\(percent(cons.support)) of the analysis points \(way), \(percent(cons.opposition)) against (needs ≥ 50% and ≤ 30%)",
+                                 passed: !balanced && cons.support >= minimumSupport && cons.opposition <= maximumOpposition))
         if let age = lastCandleAge {
             let limit: TimeInterval = profile.planTimeframe.isIntraday ? 3 * 3600 : 5 * 86_400
             checks.append(ScoreCheck(id: "data", title: "Fresh price data",
@@ -143,23 +148,33 @@ nonisolated enum Scoring {
         }
         // Only events specific to this product block a trade (its results, dividend, index change, token unlock…).
         // Market-wide data happens every few days and becomes a caution instead.
+        // Long holds (positional, long-term) always span a results date, so for them only the next 14 days block.
+        let holding = plan?.holdingDays ?? profile.maxHoldingDays
+        let longHold: [HoldingProfile] = [.positional, .longTerm, .equal]
+        let blockWindow = longHold.contains(profile) ? min(holding, 14) : holding
         if let s2 = stages.first(where: { $0.stage == 2 && $0.status == .done }) {
+            let knowledgeOnly = !s2.usedWebSearch ? " (model knowledge only — verify the date)" : ""
             if let d = s2.extra["next_major_event_days"].flatMap(Int.init), d >= 0 {
-                let inside = d <= profile.maxHoldingDays
-                checks.append(ScoreCheck(id: "event", title: "No product event while holding",
-                                         detail: inside ? "a product-specific event is due in \(d) day\(d == 1 ? "" : "s")"
-                                                        : "next one in \(d) days, after the holding period", passed: !inside))
+                let blocks = d <= blockWindow
+                let detail = blocks ? "a product-specific event is due in \(d) day\(d == 1 ? "" : "s")\(knowledgeOnly)"
+                    : d <= holding ? "next one in \(d) days — inside the holding period, so expect a possible gap\(knowledgeOnly)"
+                    : "next one in \(d) days, after the holding period"
+                checks.append(ScoreCheck(id: "event", title: "No product event soon", detail: detail, passed: !blocks))
+            } else if s2.extra["next_major_event_checked"] == "1" || s2.extra["next_major_event_days"] != nil {
+                checks.append(ScoreCheck(id: "event", title: "No product event soon", detail: "none found\(knowledgeOnly)", passed: true))
             } else {
-                checks.append(ScoreCheck(id: "event", title: "No product event while holding", detail: "none found", passed: true))
+                checks.append(ScoreCheck(id: "event", title: "No product event soon",
+                                         detail: "the event stage did not answer this — check results dates yourself", passed: false, blocking: false))
             }
         } else {
-            checks.append(ScoreCheck(id: "event", title: "No product event while holding",
+            checks.append(ScoreCheck(id: "event", title: "No product event soon",
                                      detail: "event calendar stage unavailable — check results dates yourself", passed: false, blocking: false))
         }
         if let plan {
-            if plan.side != side {
+            if plan.side != side || balanced {
                 checks.append(ScoreCheck(id: "plan", title: "Trade plan",
-                                         detail: "the final stage proposed a \(plan.side) plan, but the score points \(way)", passed: false))
+                                         detail: balanced ? "the final stage proposed a \(plan.side) plan, but the score has no clear direction"
+                                                          : "the final stage proposed a \(plan.side) plan, but the score points \(way)", passed: false))
             } else if !plan.issues.isEmpty {
                 checks.append(ScoreCheck(id: "plan", title: "Trade plan", detail: plan.issues.joined(separator: " · "), passed: false))
             } else {
@@ -168,7 +183,7 @@ nonisolated enum Scoring {
         } else {
             checks.append(ScoreCheck(id: "plan", title: "Trade plan", detail: "the final stage gave no entry and stop", passed: false))
         }
-        if side == "short", cannotHoldShort(instrument, profile: profile) {
+        if band == .sell || band == .strongSell, cannotHoldShort(instrument, profile: profile) {
             checks.append(ScoreCheck(id: "short", title: "Can be held short",
                                      detail: "Indian shares can't be held short overnight — read this as \"avoid / exit if holding\"",
                                      passed: false))
@@ -188,8 +203,8 @@ nonisolated enum Scoring {
 
     /// A+ needs the Strong band, strong evidence and near-unanimous agreement; A most of that; B = passes the checks.
     static func grade(composite: Int, consensus: Consensus) -> String {
-        let distance = abs(composite - 505)
-        var points = distance >= 245 ? 2 : distance >= 165 ? 1 : 0
+        let distance = abs(composite - 500)   // bands are symmetric around 500: 620/380 and 750/250
+        var points = distance >= 250 ? 2 : distance >= 170 ? 1 : 0
         points += consensus.evidence >= 0.65 ? 2 : consensus.evidence >= 0.5 ? 1 : 0
         points += consensus.support >= 0.85 && consensus.opposition <= 0.05 ? 2
             : consensus.support >= 0.65 && consensus.opposition <= 0.2 ? 1 : 0
@@ -230,7 +245,8 @@ nonisolated enum Scoring {
     }
 
     /// Nearest support below and resistance above the price, as plain-English levels to watch.
-    static func watchLevels(zones: [Levels.Zone], lastPrice: Double, lean: String?, currency: String) -> [String] {
+    static func watchLevels(zones: [Levels.Zone], lastPrice: Double, lean: String?, currency: String,
+                            includeShort: Bool = true) -> [String] {
         func fmt(_ v: Double) -> String {
             v.formatted(.number.precision(.fractionLength(FeatureEngine.decimals(v))).grouping(.automatic)
                 .locale(Locale(identifier: currency == "INR" ? "en_IN" : "en_US")))
@@ -240,9 +256,11 @@ nonisolated enum Scoring {
             out.append("Long case improves on a close above \(fmt(r.price)) (resistance, \(r.touches) touch\(r.touches == 1 ? "" : "es")).")
         }
         if let s = zones.filter({ $0.kind == .support && $0.price < lastPrice }).max(by: { $0.price < $1.price }) {
-            out.append("Short case improves on a close below \(fmt(s.price)) (support, \(s.touches) touch\(s.touches == 1 ? "" : "es")).")
+            out.append(includeShort
+                       ? "Short case improves on a close below \(fmt(s.price)) (support, \(s.touches) touch\(s.touches == 1 ? "" : "es"))."
+                       : "The long case weakens on a close below \(fmt(s.price)) (support, \(s.touches) touch\(s.touches == 1 ? "" : "es")).")
         }
-        return lean == "short" ? out.reversed() : out
+        return lean == "short" && includeShort ? out.reversed() : out
     }
 }
 

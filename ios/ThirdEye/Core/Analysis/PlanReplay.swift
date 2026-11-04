@@ -124,6 +124,15 @@ nonisolated enum PlanReplay {
         }
     }
 
+    /// Trading hours per day (for intraday charts).
+    static func sessionHours(_ i: Instrument) -> Double {
+        switch i.provider {
+        case .binance: return 24
+        case .twelveData: return i.kind == .forex || i.kind == .commodity ? 24 : 6.5        // FX/metals ~24 h; US cash 6.5 h
+        case .upstox: return i.exchange == "MCX" || i.segment.hasPrefix("MCX") ? 14 : 6.25  // MCX 09:00–23:30; NSE/BSE 09:15–15:30
+        }
+    }
+
     /// Holding period in bars of the plan's chart. Crypto trades every day; most other markets ~5 days a week.
     static func horizonBars(days: Int, timeframe: Timeframe, instrument: Instrument) -> Int {
         let d = Double(max(days, 1))
@@ -134,8 +143,7 @@ nonisolated enum PlanReplay {
         case .w1: bars = d / 7
         case .mo1: bars = d / 30
         default:
-            let sessionHours = everyDay ? 24.0 : instrument.provider == .upstox ? 6.25 : 8.0
-            bars = d * sessionHours * 3600 / timeframe.seconds
+            bars = d * sessionHours(instrument) * 3600 / timeframe.seconds
         }
         return min(max(Int(bars.rounded()), 1), 250)
     }

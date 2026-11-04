@@ -259,7 +259,8 @@ final class AnalysisEngine {
         run?.evidence = evaluation.consensus.evidence
         run?.baseRate = baseRate
         run?.watchLevels = Scoring.watchLevels(zones: planSnap?.zones ?? [], lastPrice: lastCandle.close,
-                                               lean: evaluation.lean ?? evaluation.side, currency: instrument.currency)
+                                               lean: evaluation.lean ?? evaluation.side, currency: instrument.currency,
+                                               includeShort: !Scoring.cannotHoldShort(instrument, profile: profile))
         run?.plan = plan
         run?.verifierNotes = verifierNotes
         run?.totalCostUSD = runningCost

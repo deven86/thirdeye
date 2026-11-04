@@ -123,6 +123,7 @@ nonisolated enum StageParser {
         if words.count > 80 { summary = words.prefix(80).joined(separator: " ") + "…" }
 
         var extra: [String: String] = [:]
+        if obj.keys.contains("next_major_event_days") { extra["next_major_event_checked"] = "1" }
         if let d = number(obj["next_major_event_days"]) { extra["next_major_event_days"] = String(Int(d.rounded())) }
         if let d = number(obj["next_macro_event_days"]) { extra["next_macro_event_days"] = String(Int(d.rounded())) }
         for key in ["side", "invalidation"] {

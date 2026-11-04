@@ -117,7 +117,8 @@ struct AnalysisReportView: View {
 
     private func checksCard(_ checks: [ScoreCheck]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(verdict == .noTrade ? "Why this is “No trade”" : "Every check passed", systemImage: verdict == .noTrade ? "hand.raised" : "checkmark.seal")
+            Label(verdict == .noTrade ? "Why this is “No trade”" : checks.allSatisfy(\.passed) ? "Every check passed" : "All blocking checks passed",
+                  systemImage: verdict == .noTrade ? "hand.raised" : "checkmark.seal")
                 .font(.headline)
                 .foregroundStyle(verdict == .noTrade ? palette.warning : palette.up)
             ForEach(checks) { check in

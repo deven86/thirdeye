@@ -24,8 +24,11 @@ nonisolated enum HotMarket: String, CaseIterable, Identifiable, Codable, Sendabl
         }
     }
 
-    /// Indian cash shares can only be shorted intraday, so swing scans there are long-only.
+    /// Indian cash shares can only be shorted intraday, so other scans there are long-only. US scans stay
+    /// long-only (shorting US shares needs a margin account, which Indian residents generally can't use).
     var allowsShorts: Bool { self == .crypto || self == .forexMetals }
+
+    func allowsShorts(_ profile: HoldingProfile) -> Bool { allowsShorts || (self == .india && profile == .scalpIntraday) }
 
     /// Daily bars a product needs before it is screened: room for the 200-day average and a real history.
     /// Keeps out new listings — on Binance that includes tokenised US shares (e.g. SOXLB = a 3× leveraged ETF).
@@ -307,7 +310,7 @@ final class HotTradesEngine {
                 } else {
                     eligible += 1
                     if let r = await Task.detached(priority: .userInitiated, operation: {
-                        HotScreener.row(instrument, candles: candles, allowShorts: market.allowsShorts)
+                        HotScreener.row(instrument, candles: candles, allowShorts: market.allowsShorts(profile))
                     }).value { rows.append(r) }
                 }
             } catch MarketDataError.loginRequired {

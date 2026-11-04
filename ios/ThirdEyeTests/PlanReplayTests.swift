@@ -96,6 +96,9 @@ struct PlanReplayTests {
         #expect(PlanReplay.horizonBars(days: 365, timeframe: .w1, instrument: nse) == 52)
         #expect(PlanReplay.horizonBars(days: 1, timeframe: .m15, instrument: btc) == 96)
         #expect(PlanReplay.horizonBars(days: 1, timeframe: .m15, instrument: nse) == 25)
+        let eur = Instrument(id: "twelve:EUR/USD", provider: .twelveData, symbol: "EUR/USD", name: "EUR/USD", exchange: "FX",
+                             segment: "FOREX", kind: .forex, currency: "USD")
+        #expect(PlanReplay.horizonBars(days: 1, timeframe: .m15, instrument: eur) == 96, "forex trades ~24 h")
         #expect(PlanReplay.roundTripCostPct(btc) == 0.2)
         #expect(PlanReplay.roundTripCostPct(nse) == 0.25)
     }
