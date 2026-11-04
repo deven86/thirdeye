@@ -116,23 +116,33 @@ final class AnalysisEngine {
         var results: [StageResult] = []
         let specs = StageSpec.all.filter { $0.id <= 9 }
         let settings = context.settings
+        // Build every job on the main actor first; child tasks receive only Sendable values.
+        let jobs: [(spec: StageSpec, prompt: String, ref: ModelRef?)] = specs.map { spec in
+            (spec,
+             Prompts.user(spec: spec, instrument: instrument, profile: profile, lastPrice: lastCandle.close,
+                          packs: packs, priorStages: [], today: Date()),
+             settings.tierAssignments[spec.tier])
+        }
+        let ids = featureIDs
         await withTaskGroup(of: StageResult.self) { group in
-            var iterator = specs.makeIterator()
-            func launch() {
-                guard let spec = iterator.next() else { return }
-                stageStatus[spec.id] = .running
-                let prompt = Prompts.user(spec: spec, instrument: instrument, profile: profile, lastPrice: lastCandle.close,
-                                          packs: packs, priorStages: [], today: Date())
-                let ref = settings.tierAssignments[spec.tier]
-                group.addTask { await Self.runStage(spec, prompt: prompt, ref: ref, featureIDs: featureIDs) }
+            var next = 0
+            while next < min(2, jobs.count) {
+                let job = jobs[next]
+                stageStatus[job.spec.id] = .running
+                group.addTask { await AnalysisEngine.runStage(job.spec, prompt: job.prompt, ref: job.ref, featureIDs: ids) }
+                next += 1
             }
-            launch(); launch()
             for await result in group {
                 results.append(result)
                 stageStatus[result.stage] = result.status
                 runningCost += result.costUSD
                 run?.stages = results.sorted { $0.stage < $1.stage }
-                if !Task.isCancelled { launch() }
+                if next < jobs.count, !Task.isCancelled {
+                    let job = jobs[next]
+                    stageStatus[job.spec.id] = .running
+                    group.addTask { await AnalysisEngine.runStage(job.spec, prompt: job.prompt, ref: job.ref, featureIDs: ids) }
+                    next += 1
+                }
             }
         }
         if Task.isCancelled { return }
