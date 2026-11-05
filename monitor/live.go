@@ -29,6 +29,7 @@ type LiveState struct {
 	Price           float64  `json:"price"`
 	R               *float64 `json:"r,omitempty"`
 	PnlPercent      *float64 `json:"pnlPercent,omitempty"`
+	Pnl             *float64 `json:"pnl,omitempty"` // money: booked + open, in the product's currency
 	Stop            float64  `json:"stop"`
 	NextTarget      *float64 `json:"nextTarget,omitempty"`
 	NextTargetStage *int     `json:"nextTargetStage,omitempty"`
@@ -80,6 +81,14 @@ func BuildLiveState(t WatchTrade, price float64, now time.Time) LiveState {
 	if entry > 0 {
 		pct := dir * (price/entry - 1) * 100
 		s.PnlPercent = &pct
+	}
+	if t.OpenQuantity > 0 || t.Realized != 0 {
+		size := t.ContractSize
+		if size <= 0 {
+			size = 1
+		}
+		pnl := t.Realized + dir*(price-entry)*t.OpenQuantity*size
+		s.Pnl = &pnl
 	}
 	if next != nil {
 		span := dir * (*next.Price - t.Stop)

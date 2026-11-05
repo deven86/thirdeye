@@ -24,6 +24,8 @@ type WatchTrade struct {
 	InitialStop    float64   `json:"initialStop"`
 	AvgEntry       *float64  `json:"avgEntry,omitempty"`
 	OpenQuantity   float64   `json:"openQuantity"`
+	ContractSize   float64   `json:"contractSize,omitempty"` // units per 1 of quantity (forex lot 100000); 0 = 1
+	Realized       float64   `json:"realized,omitempty"`     // money already booked, after fees
 	Targets        []Target  `json:"targets"`
 	Levels         []Level   `json:"levels,omitempty"` // key chart levels from the analysis (trade watch)
 	CompleteBy     time.Time `json:"completeBy"`

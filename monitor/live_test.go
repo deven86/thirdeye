@@ -118,3 +118,12 @@ func TestTickPushesLiveActivityAndDropsGoneTokens(t *testing.T) {
 		t.Fatal("a gone token must be dropped")
 	}
 }
+
+func TestLiveStateMoneyIncludesLotsAndBookedProfit(t *testing.T) {
+	tr := liveTrade() // long 10 @ 100
+	tr.ContractSize, tr.Realized = 100, 50
+	s := BuildLiveState(tr, 105, time.Now())
+	if s.Pnl == nil || *s.Pnl != 50+5*10*100 {
+		t.Fatalf("pnl %v", s.Pnl)
+	}
+}

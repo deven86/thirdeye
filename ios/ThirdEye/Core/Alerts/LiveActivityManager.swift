@@ -32,7 +32,8 @@ final class LiveActivityManager {
         else { decimals = FeatureEngine.decimals(t.plannedEntryMid) }
         let entry = TradeMath.summary(t, lastPrice: nil).averageEntry ?? t.plannedEntryMid
         return TradeActivityAttributes(tradeID: t.id.uuidString, symbol: t.instrument.alertName, side: t.side, entry: entry,
-                                       currency: t.instrument.currency, decimals: decimals, paper: t.mode == .paper)
+                                       currency: t.instrument.currency, decimals: decimals, paper: t.mode == .paper,
+                                       hideMoney: UserDefaults.standard.bool(forKey: "settings.hideLockScreenPnL"))
     }
 
     /// Same maths as the PC (monitor/live.go BuildLiveState), for the first frame and in-app refreshes.
@@ -57,6 +58,7 @@ final class LiveActivityManager {
         let risk = abs(entry - t.initialStop)
         if risk > 0 { st.r = dir * (price - entry) / risk }
         if entry > 0 { st.pnlPercent = dir * (price / entry - 1) * 100 }
+        st.pnl = s.total
         if let target = next?.price {
             let span = dir * (target - t.stopLoss)
             if span > 0 { st.progress = min(max(dir * (price - t.stopLoss) / span, 0), 1) }

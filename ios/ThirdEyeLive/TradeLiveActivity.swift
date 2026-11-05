@@ -7,8 +7,9 @@ struct TradeLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: TradeActivityAttributes.self) { context in
             LockScreenTradeView(attributes: context.attributes, state: context.state, stale: context.isStale)
-                .activityBackgroundTint(Color.black.opacity(0.75))
-                .activitySystemActionForegroundColor(.white)
+                .activityBackgroundTint(nil)   // the system's glass, light or dark with the Lock Screen
+                .activitySystemActionForegroundColor(.primary)
+                .widgetURL(URL(string: "thirdeye://trade/\(context.attributes.tradeID)"))
         } dynamicIsland: { context in
             let a = context.attributes, s = context.state
             return DynamicIsland {
@@ -21,7 +22,7 @@ struct TradeLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.trailing) {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(a.format(s.price)).font(.headline.monospacedDigit())
-                        Text(TradeLiveText.result(s)).font(.caption.monospacedDigit()).foregroundStyle(TradeLiveText.color(s))
+                        Text(TradeLiveText.money(a, s) ?? TradeLiveText.result(s)).font(.caption.monospacedDigit()).foregroundStyle(TradeLiveText.color(s))
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
@@ -68,6 +69,9 @@ struct LockScreenTradeView: View {
             }
             HStack {
                 Text(TradeLiveText.result(s)).font(.callout.weight(.semibold).monospacedDigit()).foregroundStyle(TradeLiveText.color(s))
+                if let m = TradeLiveText.money(a, s) {
+                    Text(m).font(.callout.weight(.bold).monospacedDigit()).foregroundStyle(TradeLiveText.color(s))
+                }
                 Spacer()
                 Text(TradeLiveText.statusTitle(s)).font(.caption.weight(.semibold)).foregroundStyle(TradeLiveText.color(s))
             }
@@ -90,7 +94,6 @@ struct LockScreenTradeView: View {
             .foregroundStyle(stale ? .orange : .secondary)
         }
         .padding(14)
-        .foregroundStyle(.white)
     }
 }
 
@@ -106,7 +109,7 @@ struct TradeProgressBar: View {
                 Capsule().fill(LinearGradient(colors: [.red.opacity(0.7), .gray.opacity(0.4), .green.opacity(0.7)],
                                               startPoint: .leading, endPoint: .trailing))
                     .frame(height: 6)
-                Circle().fill(.white).frame(width: 12, height: 12)
+                Circle().fill(.primary).frame(width: 12, height: 12)
                     .offset(x: max(0, min(w - 12, w * p - 6)))
             }
             .frame(height: 12)
@@ -120,6 +123,12 @@ enum TradeLiveText {
         guard let r = s.r else { return s.note ?? "Waiting for entry" }
         let pct = s.pnlPercent.map { String(format: " · %+.2f%%", $0) } ?? ""
         return String(format: "%+.2fR", r) + pct
+    }
+
+    /// Profit in money, unless the user hid it on the Lock Screen.
+    static func money(_ a: TradeActivityAttributes, _ s: TradeActivityAttributes.ContentState) -> String? {
+        guard a.hideMoney != true, let p = s.pnl else { return nil }
+        return a.money(p)
     }
 
     static func compact(_ s: TradeActivityAttributes.ContentState) -> String {

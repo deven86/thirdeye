@@ -72,21 +72,35 @@ struct RootView: View {
                 Task { await monitor.refreshAll(trades: trades.trades, market: market) }
                 Task { await outcomes.gradeDue(analyses.runs, market: market) }
                 Task { await live.reconcile(trades.trades, prices: nil, monitor: monitor) }
+            } else if phase == .background {
+                WidgetPublisher.publish(trades: trades.trades, monitor: monitor, force: true)
             }
         }
         // Keep the PC monitor's watch list in step with every trade change (debounced).
         .onChange(of: trades.trades) { _, all in
             monitor.scheduleSync(all)
+            WidgetPublisher.publish(trades: all, monitor: monitor)
             Task { await live.reconcile(all, prices: nil, monitor: monitor) }
         }
         .onChange(of: market.upstoxTokenExpiry) { _, _ in Task { await monitor.syncCredentials(market: market) } }
         .onChange(of: market.hasTwelveDataKey) { _, _ in Task { await monitor.syncCredentials(market: market) } }
-        .task { await monitor.refreshAll(trades: trades.trades, market: market) }
+        .task {
+            await monitor.refreshAll(trades: trades.trades, market: market)
+            WidgetPublisher.publish(trades: trades.trades, monitor: monitor, force: true)
+        }
+        // Taps on the widget or the Lock Screen card open that trade.
+        .onOpenURL { url in
+            guard url.scheme == "thirdeye", url.host() == "trade",
+                  let id = UUID(uuidString: url.lastPathComponent) else { return }
+            monitor.openTradeID = id
+        }
         // Trade watch: re-check open trades' parameters while the app is open (each at its own interval).
         .task(id: scenePhase == .active && lock.isUnlocked) {
             guard scenePhase == .active, lock.isUnlocked else { return }
             while !Task.isCancelled {
                 await guardian.checkDue(trades: trades, market: market, analyses: analyses, settings: settings)
+                await monitor.refreshStatus()
+                WidgetPublisher.publish(trades: trades.trades, monitor: monitor)
                 try? await Task.sleep(for: .seconds(300))
             }
         }

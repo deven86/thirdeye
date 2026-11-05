@@ -30,6 +30,8 @@ nonisolated struct MonitorWatchTrade: Codable, Hashable, Sendable {
     var initialStop: Double
     var avgEntry: Double?
     var openQuantity: Double
+    var contractSize: Double = 1
+    var realized: Double = 0
     var targets: [Target]
     var levels: [Level]? = nil
     var completeBy: Date
@@ -97,6 +99,7 @@ nonisolated struct MonitorWatchTrade: Codable, Hashable, Sendable {
             kind: t.instrument.kind.rawValue, currency: t.instrument.currency, side: t.side, status: t.status.rawValue,
             mode: t.mode.rawValue, entryLow: t.plannedEntryLow, entryHigh: t.plannedEntryHigh, stop: t.stopLoss,
             initialStop: t.initialStop, avgEntry: summary.averageEntry, openQuantity: summary.openQuantity,
+            contractSize: t.instrument.contractSize, realized: summary.realized,
             targets: t.takeProfits.map {
                 Target(stage: $0.stage, price: $0.price, r: $0.rMultiple, bookPercent: $0.bookPercent, then: $0.then,
                        booked: booked.contains($0.stage))
@@ -312,6 +315,7 @@ final class MonitorStore {
             throw MonitorError.refused("Unexpected answer from the PC.")
         }
         try keychain.set(token, for: Self.tokenAccount)
+        SharedStore.write(Data(token.utf8), account: SharedStore.tokenAccount)
         address = host
         UserDefaults.standard.set(host, forKey: Self.addressKey)
         isPaired = true
@@ -325,6 +329,7 @@ final class MonitorStore {
 
     private func forgetPairing() {
         try? keychain.delete(Self.tokenAccount)
+        SharedStore.delete(SharedStore.tokenAccount)
         isPaired = false
         status = nil
     }
@@ -380,6 +385,14 @@ final class MonitorStore {
                                               teamID: prefix.trimmingCharacters(in: CharacterSet(charactersIn: ".")))
         do { _ = try await request("PUT", "/v1/live-activity", body: body) }
         catch { syncError = "Lock Screen card: \(error.localizedDescription)" }
+    }
+
+    /// Lets the Home Screen widget ask the PC for prices (copies the pairing token to the shared keychain item).
+    func shareTokenWithWidget() {
+        guard isPaired, let token = try? keychain.get(Self.tokenAccount) else { return }
+        if SharedStore.read(SharedStore.tokenAccount) != Data(token.utf8) {
+            SharedStore.write(Data(token.utf8), account: SharedStore.tokenAccount)
+        }
     }
 
     func endLiveActivity(tradeID: String) async {

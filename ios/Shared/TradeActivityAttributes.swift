@@ -8,6 +8,7 @@ nonisolated struct TradeActivityAttributes: ActivityAttributes, Sendable {
         var price: Double
         var r: Double?
         var pnlPercent: Double?
+        var pnl: Double?            // money: booked + open, in the product's currency
         var stop: Double
         var nextTarget: Double?
         var nextTargetStage: Int?
@@ -26,8 +27,22 @@ nonisolated struct TradeActivityAttributes: ActivityAttributes, Sendable {
     var currency: String
     var decimals: Int
     var paper: Bool
+    var hideMoney: Bool? = nil      // Settings → Hide P&L on Lock Screen
 
     var isLong: Bool { side != "short" }
+
+    func money(_ v: Double) -> String {
+        let symbol = switch currency {
+        case "INR": "₹"
+        case "USD", "USDT", "USDC": "$"
+        case "EUR": "€"
+        case "GBP": "£"
+        default: ""
+        }
+        let n = abs(v).formatted(.number.precision(.fractionLength(abs(v) >= 1000 ? 0 : 2)).grouping(.automatic)
+            .locale(Locale(identifier: currency == "INR" ? "en_IN" : "en_US")))
+        return (v >= 0 ? "+" : "−") + symbol + n
+    }
 
     func format(_ v: Double) -> String {
         let symbol = switch currency {

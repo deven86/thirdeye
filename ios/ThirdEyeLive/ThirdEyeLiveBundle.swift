@@ -5,5 +5,6 @@ import WidgetKit
 struct ThirdEyeLiveBundle: WidgetBundle {
     var body: some Widget {
         TradeLiveActivity()
+        TradesWidget()
     }
 }

@@ -309,3 +309,17 @@ struct ProductIdentityTests {
         #expect(fut.isin == nil)
     }
 }
+
+@Suite("Home Screen widget")
+struct WidgetDataTests {
+    @Test func moneyRAndBarMatchTheTrade() {
+        let w = WidgetTrade(id: "x", name: "NZD/USD", side: "short", status: "open", entry: 0.56396, entryLow: 0.5635, entryHigh: 0.5652,
+                            stop: 0.57, initialStop: 0.57, nextTarget: 0.5587, nextTargetStage: 1, openUnits: 100_000, realized: 0,
+                            currency: "USD", decimals: 5, paper: true, lastPrice: nil, lastPriceAt: nil)
+        #expect(abs((w.pnl(at: 0.56376) ?? 0) - 20) < 1e-6, "same +$20 as MetaTrader")
+        #expect(w.status(at: 0.5701) == "STOP HIT")
+        #expect(w.status(at: 0.5586) == "TP1 hit")
+        #expect(w.money(20) == "+$20.00")
+        #expect(SharedStore.monitorURL("100.108.39.72", "/v1/status")?.absoluteString == "http://100.108.39.72:8788/v1/status")
+    }
+}
