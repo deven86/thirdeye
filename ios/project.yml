@@ -118,36 +118,7 @@ schemes:
     build:
       targets:
         ThirdEye: all
-        ThirdEyeLive:
-    type: app-extension
-    platform: iOS
-    supportedDestinations: [iOS]
-    sources:
-      - path: ThirdEyeLive
-      - path: Shared
-    info:
-      path: ThirdEyeLive/Info.plist
-      properties:
-        CFBundleDisplayName: Third Eye Live
-        CFBundleShortVersionString: $(MARKETING_VERSION)
-        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        NSExtension:
-          NSExtensionPointIdentifier: com.apple.widgetkit-extension
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jondhale.thirdeye.live
-        TARGETED_DEVICE_FAMILY: "1,2"
-        CODE_SIGN_STYLE: Automatic
-        GENERATE_INFOPLIST_FILE: NO
-        SKIP_INSTALL: YES
-        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
-      configs:
-        Release:
-          CODE_SIGN_STYLE: Manual
-          CODE_SIGN_IDENTITY: "Apple Distribution"
-          PROVISIONING_PROFILE_SPECIFIER: "match AppStore com.jondhale.thirdeye.live"
-
-  ThirdEyeTests: [test]
+        ThirdEyeTests: [test]
     test:
       targets:
         - ThirdEyeTests
