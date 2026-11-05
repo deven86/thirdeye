@@ -103,16 +103,15 @@ final class LiveActivityManager {
         persist()
         tokenTasks[id.uuidString]?.cancel()
         tokenTasks[id.uuidString] = nil
-        for a in Activity<TradeActivityAttributes>.activities where a.attributes.tradeID == id.uuidString {
-            await a.end(nil, dismissalPolicy: .immediate)
-        }
+        await Self.end(tradeID: id.uuidString, content: nil, policy: .immediate)
         await monitor.endLiveActivity(tradeID: id.uuidString)
     }
 
     /// While the app is open: refresh cards with fresh prices.
     func update(_ t: Trade, price: Double) async {
-        guard let a = activity(for: t.id), a.activityState == .active else { return }
-        await a.update(ActivityContent(state: Self.state(t, price: price), staleDate: Date().addingTimeInterval(1800)))
+        guard activity(for: t.id)?.activityState == .active else { return }
+        await Self.update(tradeID: t.id.uuidString,
+                          content: ActivityContent(state: Self.state(t, price: price), staleDate: Date().addingTimeInterval(1800)))
     }
 
     /// On launch and after every trade change: end cards of closed trades, restart wanted ones iOS has ended,
@@ -124,9 +123,10 @@ final class LiveActivityManager {
             if t == nil || t!.status == .closed || t!.status == .cancelled {
                 if let t {
                     let final = Self.state(t, price: TradeMath.summary(t, lastPrice: nil).averageExit ?? a.content.state.price)
-                    await a.end(ActivityContent(state: final, staleDate: nil), dismissalPolicy: .after(Date().addingTimeInterval(3600)))
+                    await Self.end(tradeID: a.attributes.tradeID, content: ActivityContent(state: final, staleDate: nil),
+                                   policy: .after(Date().addingTimeInterval(3600)))
                 } else {
-                    await a.end(nil, dismissalPolicy: .immediate)
+                    await Self.end(tradeID: a.attributes.tradeID, content: nil, policy: .immediate)
                 }
                 wanted.remove(a.attributes.tradeID)
                 await monitor.endLiveActivity(tradeID: a.attributes.tradeID)
@@ -141,6 +141,21 @@ final class LiveActivityManager {
             }
         }
         persist()
+    }
+
+    // ActivityKit objects aren't Sendable: look them up and act on them off the main actor, passing only values.
+    @concurrent nonisolated private static func end(tradeID: String, content: ActivityContent<TradeActivityAttributes.ContentState>?,
+                                                    policy: ActivityUIDismissalPolicy) async {
+        for a in Activity<TradeActivityAttributes>.activities where a.attributes.tradeID == tradeID {
+            await a.end(content, dismissalPolicy: policy)
+        }
+    }
+
+    @concurrent nonisolated private static func update(tradeID: String,
+                                                       content: ActivityContent<TradeActivityAttributes.ContentState>) async {
+        for a in Activity<TradeActivityAttributes>.activities where a.attributes.tradeID == tradeID && a.activityState == .active {
+            await a.update(content)
+        }
     }
 
     private func activity(for id: UUID) -> Activity<TradeActivityAttributes>? {
