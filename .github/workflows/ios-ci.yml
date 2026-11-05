@@ -72,7 +72,7 @@ jobs:
 
       - name: Design snapshots (base64 PNG lines for review)
         if: always()
-        run: grep -aoE "SNAPSHOT(-HEIGHT)? [a-z-]+ [A-Za-z0-9+/=.]+" build.log || true
+        run: grep -aoE "SNAPSHOT(-HEIGHT)? [a-z0-9-]+ [A-Za-z0-9+/=.]+" build.log || true
 
       - name: Upload logs on failure
         if: failure()

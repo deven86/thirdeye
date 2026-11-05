@@ -26,7 +26,13 @@ struct WidgetSnapshotTests {
         let r = ImageRenderer(content: view.frame(width: size.width, height: size.height))
         r.scale = 2
         guard let png = r.uiImage?.pngData() else { Issue.record("no image for \(name)"); return }
-        print("SNAPSHOT \(name) \(png.base64EncodedString())")
+        // Log lines are cut around 64 KB: send the image in numbered pieces.
+        let b64 = png.base64EncodedString()
+        let pieces = stride(from: 0, to: b64.count, by: 16_000).map { i -> String in
+            let start = b64.index(b64.startIndex, offsetBy: i)
+            return String(b64[start..<(b64.index(start, offsetBy: 16_000, limitedBy: b64.endIndex) ?? b64.endIndex)])
+        }
+        for (i, piece) in pieces.enumerated() { print("SNAPSHOT \(name)-p\(i)of\(pieces.count) \(piece)") }
     }
 
     @Test func homeScreenWidgetAllSizes() {

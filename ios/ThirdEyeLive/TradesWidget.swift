@@ -108,7 +108,7 @@ struct TradesWidgetView: View {
     private func header(more: Int) -> some View {
         HStack(spacing: 4) {
             Image(systemName: "eye").font(.system(size: 11, weight: .semibold)).foregroundStyle(TE.accent)
-            Text("Open trades").font(.system(size: 12, weight: .semibold))
+            Text(family == .systemSmall ? "Trades" : "Open trades").font(.system(size: 12, weight: .semibold)).lineLimit(1)
             if more > 0 {
                 Text("+\(more) more").font(.system(size: 10, weight: .semibold)).foregroundStyle(TE.accent)
             }
