@@ -1,103 +1,101 @@
 import ActivityKit
 import SwiftUI
+#if canImport(ThirdEye)
+@testable import ThirdEye   // design snapshot tests compile these files too
+#endif
 import WidgetKit
 
-/// Lock Screen banner and Dynamic Island for an open (or upcoming) trade. Updated by the PC monitor by push.
+/// Lock Screen card and Dynamic Island for a trade. The Lock Screen card is the app's trade box on glass:
+/// a translucent dark tint over the blurred wallpaper, white text, the same chips, profit, status, R and bar.
 struct TradeLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: TradeActivityAttributes.self) { context in
             LockScreenTradeView(attributes: context.attributes, state: context.state, stale: context.isStale)
-                .activityBackgroundTint(nil)   // the system's glass, light or dark with the Lock Screen
-                .activitySystemActionForegroundColor(.primary)
+                .activityBackgroundTint(Color.black.opacity(0.32))
+                .activitySystemActionForegroundColor(.white)
                 .widgetURL(URL(string: "thirdeye://trade/\(context.attributes.tradeID)"))
         } dynamicIsland: { context in
             let a = context.attributes, s = context.state
+            let m = TradeBoxModel(a, s)
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(a.symbol).font(.headline).lineLimit(1)
-                        Text(a.isLong ? "LONG" : "SHORT").font(.caption2.weight(.bold)).foregroundStyle(a.isLong ? .green : .red)
+                        Text(a.symbol).font(.system(size: 14, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
+                        Text(a.isLong ? "LONG" : "SHORT").font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(a.isLong ? TE.glassUp : TE.glassDown)
                     }
+                    .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text(a.format(s.price)).font(.headline.monospacedDigit())
-                        Text(TradeLiveText.money(a, s) ?? TradeLiveText.result(s)).font(.caption.monospacedDigit()).foregroundStyle(TradeLiveText.color(s))
+                        Text(m.money ?? m.result ?? "").font(.system(size: 14, weight: .bold).monospacedDigit())
+                            .foregroundStyle(m.moneyTone == .up ? TE.glassUp : TE.glassDown).lineLimit(1).minimumScaleFactor(0.7)
+                        Text(m.price ?? "").font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
                     }
+                    .padding(.trailing, 4)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 4) {
+                    VStack(spacing: 5) {
+                        HStack(spacing: 6) {
+                            Text(m.state).font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(m.stateTone == .down ? TE.glassDown : m.stateTone == .accent ? TE.glassAccent : TE.glassUp)
+                            Spacer(minLength: 4)
+                            if let r = m.result { Text(r).font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary).lineLimit(1) }
+                        }
                         TradeProgressBar(state: s)
                         HStack {
-                            Text("Stop \(a.format(s.stop))").foregroundStyle(.red)
-                            Spacer()
-                            if let t = s.nextTarget { Text("TP\(s.nextTargetStage ?? 0) \(a.format(t))").foregroundStyle(.green) }
+                            Text("Stop \(m.stop)").foregroundStyle(TE.glassDown)
+                            Spacer(minLength: 4)
+                            if let t = m.target { Text(t).foregroundStyle(TE.glassUp) }
                         }
-                        .font(.caption2.monospacedDigit())
-                        if let note = s.note { Text(note).font(.caption2).foregroundStyle(.secondary).lineLimit(1) }
+                        .font(.system(size: 10.5).monospacedDigit()).lineLimit(1).minimumScaleFactor(0.75)
                     }
+                    .padding(.horizontal, 4)
                 }
             } compactLeading: {
-                Text(String(a.symbol.prefix(4))).font(.caption2.weight(.semibold))
+                Text(String(a.symbol.prefix(5))).font(.system(size: 12, weight: .semibold))
             } compactTrailing: {
-                Text(TradeLiveText.compact(s)).font(.caption2.monospacedDigit()).foregroundStyle(TradeLiveText.color(s))
+                Text(TradeLiveText.compact(s)).font(.system(size: 12, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(TradeLiveText.color(s))
             } minimal: {
-                Text(TradeLiveText.compact(s)).font(.caption2.monospacedDigit()).foregroundStyle(TradeLiveText.color(s))
+                Text(TradeLiveText.compact(s)).font(.system(size: 11, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(TradeLiveText.color(s)).minimumScaleFactor(0.6)
             }
             .keylineTint(TradeLiveText.color(s))
         }
     }
 }
 
+/// The Lock Screen card: the app's trade box on a glass pane. About 120 pt tall — inside the 160 pt iOS allows,
+/// so nothing is cut at any text size.
 struct LockScreenTradeView: View {
     let attributes: TradeActivityAttributes
     let state: TradeActivityAttributes.ContentState
     let stale: Bool
 
     var body: some View {
-        let a = attributes, s = state
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Image(systemName: "eye").foregroundStyle(.teal)
-                Text(a.symbol).font(.headline)
-                Text(a.isLong ? "LONG" : "SHORT").font(.caption2.weight(.bold))
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background((a.isLong ? Color.green : Color.red).opacity(0.25), in: Capsule())
-                if a.paper { Text("PAPER").font(.caption2.weight(.semibold)).foregroundStyle(.secondary) }
+            HStack(spacing: 5) {
+                Image(systemName: "eye").font(.system(size: 11, weight: .semibold)).foregroundStyle(TE.glassAccent)
+                Text("Third Eye").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.8))
                 Spacer()
-                Text(a.format(s.price)).font(.title3.weight(.semibold).monospacedDigit())
+                Text(stale ? "not updated since \(state.updated.formatted(date: .omitted, time: .shortened))"
+                           : "updated \(state.updated.formatted(date: .omitted, time: .shortened))")
+                    .font(.system(size: 10).monospacedDigit())
+                    .foregroundStyle(stale ? TE.glassWarning : .white.opacity(0.6))
             }
-            HStack {
-                Text(TradeLiveText.result(s)).font(.callout.weight(.semibold).monospacedDigit()).foregroundStyle(TradeLiveText.color(s))
-                if let m = TradeLiveText.money(a, s) {
-                    Text(m).font(.callout.weight(.bold).monospacedDigit()).foregroundStyle(TradeLiveText.color(s))
-                }
-                Spacer()
-                Text(TradeLiveText.statusTitle(s)).font(.caption.weight(.semibold)).foregroundStyle(TradeLiveText.color(s))
-            }
-            TradeProgressBar(state: s)
-            HStack {
-                Text("Stop \(a.format(s.stop))").foregroundStyle(.red)
-                Spacer()
-                Text("Entry \(a.format(a.entry))").foregroundStyle(.secondary)
-                Spacer()
-                if let t = s.nextTarget { Text("TP\(s.nextTargetStage ?? 0) \(a.format(t))").foregroundStyle(.green) }
-            }
-            .font(.caption.monospacedDigit())
-            HStack {
-                if let note = s.note { Text(note).lineLimit(1) }
-                Spacer()
-                Text(stale ? "not updated since \(s.updated.formatted(date: .omitted, time: .shortened))"
-                           : "updated \(s.updated.formatted(date: .omitted, time: .shortened))")
-            }
-            .font(.caption2)
-            .foregroundStyle(stale ? .orange : .secondary)
+            TradeBox(model: TradeBoxModel(attributes, state), glass: true, showBar: true, showLevels: true, nameSize: 15)
+                .padding(.horizontal, 12).padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.10))
+                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.white.opacity(0.28), lineWidth: 0.6))
+                )
         }
-        .padding(14)
+        .padding(.horizontal, 14).padding(.vertical, 12)
     }
 }
 
-/// Stop on the left, next target on the right, a dot where the price is.
+/// Stop on the left, next target on the right, a dot where the price is (Dynamic Island).
 struct TradeProgressBar: View {
     let state: TradeActivityAttributes.ContentState
 
@@ -106,15 +104,15 @@ struct TradeProgressBar: View {
             let w = geo.size.width
             let p = min(max(state.progress, 0), 1)
             ZStack(alignment: .leading) {
-                Capsule().fill(LinearGradient(colors: [.red.opacity(0.7), .gray.opacity(0.4), .green.opacity(0.7)],
+                Capsule().fill(LinearGradient(colors: [TE.glassDown.opacity(0.8), Color.white.opacity(0.3), TE.glassUp.opacity(0.8)],
                                               startPoint: .leading, endPoint: .trailing))
-                    .frame(height: 6)
-                Circle().fill(.primary).frame(width: 12, height: 12)
-                    .offset(x: max(0, min(w - 12, w * p - 6)))
+                    .frame(height: 5)
+                Circle().fill(.white).frame(width: 10, height: 10)
+                    .offset(x: max(0, min(w - 10, w * p - 5)))
             }
-            .frame(height: 12)
+            .frame(height: 10)
         }
-        .frame(height: 12)
+        .frame(height: 10)
     }
 }
 
@@ -149,10 +147,10 @@ enum TradeLiveText {
 
     static func color(_ s: TradeActivityAttributes.ContentState) -> Color {
         switch s.status {
-        case "stop", "nearStop": .red
-        case "target": .green
-        case "waiting", "inZone": .teal
-        default: (s.r ?? 0) >= 0 ? .green : .red
+        case "stop", "nearStop": TE.glassDown
+        case "target": TE.glassUp
+        case "waiting", "inZone": TE.glassAccent
+        default: (s.r ?? 0) >= 0 ? TE.glassUp : TE.glassDown
         }
     }
 }

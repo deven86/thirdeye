@@ -21,6 +21,8 @@ nonisolated struct WidgetTrade: Codable, Hashable, Sendable, Identifiable {
     var paper: Bool
     var lastPrice: Double?
     var lastPriceAt: Double?    // Unix seconds
+    var badge: String? = nil    // Swing, Intraday, …
+    var completeBy: Double? = nil
 
     var isLong: Bool { side != "short" }
     private var dir: Double { isLong ? 1 : -1 }

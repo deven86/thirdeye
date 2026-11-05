@@ -33,7 +33,8 @@ enum WidgetPublisher {
                                stop: t.stopLoss, initialStop: t.initialStop, nextTarget: next?.price, nextTargetStage: next?.stage,
                                openUnits: s.openQuantity * t.instrument.contractSize, realized: s.realized,
                                currency: t.instrument.currency, decimals: decimals, paper: t.mode == .paper,
-                               lastPrice: price, lastPriceAt: at)
+                               lastPrice: price, lastPriceAt: at, badge: t.badge.title,
+                               completeBy: t.completeBy.timeIntervalSince1970)
         }
         let snapshot = WidgetSnapshot(trades: rows, monitorAddress: monitor.isPaired ? monitor.address : nil,
                                       hideMoney: UserDefaults.standard.bool(forKey: "settings.hideLockScreenPnL"),

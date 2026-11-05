@@ -12,7 +12,7 @@ settings:
     SWIFT_VERSION: "6.0"
     SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
     SWIFT_APPROACHABLE_CONCURRENCY: YES
-    MARKETING_VERSION: "0.11.0"
+    MARKETING_VERSION: "0.11.1"
     CURRENT_PROJECT_VERSION: "1"
     VERSIONING_SYSTEM: apple-generic
     DEVELOPMENT_TEAM: ""  # passed in by CI from the APPLE_TEAM_ID secret
@@ -120,6 +120,10 @@ targets:
     platform: iOS
     sources:
       - path: ThirdEyeTests
+      # The widget's views, compiled in too so the design snapshot test can render them.
+      - path: ThirdEyeLive/TradeBox.swift
+      - path: ThirdEyeLive/TradesWidget.swift
+      - path: ThirdEyeLive/TradeLiveActivity.swift
     dependencies:
       - target: ThirdEye
     settings:

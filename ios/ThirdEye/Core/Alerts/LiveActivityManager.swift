@@ -33,7 +33,8 @@ final class LiveActivityManager {
         let entry = TradeMath.summary(t, lastPrice: nil).averageEntry ?? t.plannedEntryMid
         return TradeActivityAttributes(tradeID: t.id.uuidString, symbol: t.instrument.alertName, side: t.side, entry: entry,
                                        currency: t.instrument.currency, decimals: decimals, paper: t.mode == .paper,
-                                       hideMoney: UserDefaults.standard.bool(forKey: "settings.hideLockScreenPnL"))
+                                       hideMoney: UserDefaults.standard.bool(forKey: "settings.hideLockScreenPnL"),
+                                       badge: t.badge.title, completeBy: t.completeBy.timeIntervalSince1970, initialStop: t.initialStop)
     }
 
     /// Same maths as the PC (monitor/live.go BuildLiveState), for the first frame and in-app refreshes.

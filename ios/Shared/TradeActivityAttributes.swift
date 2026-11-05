@@ -28,6 +28,9 @@ nonisolated struct TradeActivityAttributes: ActivityAttributes, Sendable {
     var decimals: Int
     var paper: Bool
     var hideMoney: Bool? = nil      // Settings → Hide P&L on Lock Screen
+    var badge: String? = nil        // Swing, Intraday, …
+    var completeBy: Double? = nil   // Unix seconds
+    var initialStop: Double? = nil
 
     var isLong: Bool { side != "short" }
 
