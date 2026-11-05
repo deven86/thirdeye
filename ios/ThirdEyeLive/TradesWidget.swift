@@ -15,7 +15,7 @@ nonisolated struct TradesEntry: TimelineEntry, Sendable {
     var empty: Bool
 }
 
-private struct Unchecked<T>: @unchecked Sendable { let value: T }
+private nonisolated struct Unchecked<T>: @unchecked Sendable { let value: T }
 
 nonisolated struct TradesProvider: TimelineProvider {
     func placeholder(in context: Context) -> TradesEntry { Self.sample }
