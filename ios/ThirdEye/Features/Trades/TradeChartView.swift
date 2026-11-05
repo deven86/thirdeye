@@ -105,17 +105,17 @@ enum TradeChart {
     }
 
     static func markers(_ t: Trade) -> [ChartMarker] {
-        var out = [ChartMarker(time: t.createdAt, kind: .plan, text: "Planned", below: !t.isLong)]
+        var out = [ChartMarker(time: t.createdAt, kind: .plan, text: "", below: !t.isLong)]
         for f in t.fills.sorted(by: { $0.date < $1.date }) {
             let qty = f.quantity.formatted(.number.precision(.fractionLength(0...4)))
             if f.kind == .entry {
-                out.append(ChartMarker(time: f.date, kind: .entry, text: "\(t.isLong ? "Buy" : "Sell") \(qty) @ \(FeatureEngine.plain(f.price))",
+                out.append(ChartMarker(time: f.date, kind: .entry, text: "\(t.isLong ? "Buy" : "Sell") \(qty)",
                                        below: t.isLong))
             } else {
                 let loss = t.isLong ? f.price < (TradeMath.summary(t, lastPrice: nil).averageEntry ?? f.price) : f.price > (TradeMath.summary(t, lastPrice: nil).averageEntry ?? f.price)
                 let label = f.takeProfitStage.map { "TP\($0)" } ?? (loss ? "Stop/exit" : "Exit")
                 out.append(ChartMarker(time: f.date, kind: f.takeProfitStage == nil && loss ? .stop : .exit,
-                                       text: "\(label) \(qty) @ \(FeatureEngine.plain(f.price))", below: !t.isLong))
+                                       text: label, below: !t.isLong))
             }
         }
         return out

@@ -86,6 +86,13 @@ struct NewTradeSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("\(instrument.fullSymbol) · \(instrument.name)").font(.callout.weight(.semibold))
+                        Text("\(instrument.identityLine) · \(instrument.segmentTitle)").font(.caption).foregroundStyle(palette.textSecondary)
+                        Text(instrument.brokerHint).font(.caption2).foregroundStyle(palette.textSecondary)
+                    }
+                }
                 if againstVerdict {
                     Section {
                         Label(run == nil ? "Your own plan, not an AI recommendation. It will be marked “own idea” in your journal."

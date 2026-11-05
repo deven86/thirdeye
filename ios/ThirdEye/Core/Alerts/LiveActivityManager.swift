@@ -31,7 +31,7 @@ final class LiveActivityManager {
         if let tick = t.instrument.tickSize, tick > 0 { decimals = min(max(Int(ceil(-log10(tick))), 0), 6) }
         else { decimals = FeatureEngine.decimals(t.plannedEntryMid) }
         let entry = TradeMath.summary(t, lastPrice: nil).averageEntry ?? t.plannedEntryMid
-        return TradeActivityAttributes(tradeID: t.id.uuidString, symbol: t.instrument.symbol, side: t.side, entry: entry,
+        return TradeActivityAttributes(tradeID: t.id.uuidString, symbol: t.instrument.alertName, side: t.side, entry: entry,
                                        currency: t.instrument.currency, decimals: decimals, paper: t.mode == .paper)
     }
 

@@ -45,6 +45,10 @@ struct TradeDetailView: View {
                     Spacer()
                     SignalLabel(signal: TradeMath.signal(t, lastPrice: price), trade: t)
                 }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(t.instrument.fullSymbol) · \(t.instrument.name)").font(.callout.weight(.semibold))
+                    Text(t.instrument.identityLine).font(.caption.monospacedDigit()).foregroundStyle(palette.textSecondary)
+                }
                 if let price { LabeledContent("Price now", value: plainPrice(price)) }
                 if let score = t.analysisScore {
                     LabeledContent("Analysis", value: "\(score) · \(Verdict(rawValue: t.analysisVerdict ?? "")?.title ?? "—")")
@@ -160,6 +164,21 @@ struct TradeDetailView: View {
             if !t.notes.isEmpty { Section("Notes") { Text(t.notes) } }
 
             Section {
+                LabeledContent("Exchange", value: t.instrument.exchangeBadge)
+                LabeledContent("Market", value: t.instrument.segmentTitle)
+                LabeledContent("Type", value: t.instrument.kind.title)
+                LabeledContent("Trading symbol", value: t.instrument.fullSymbol)
+                if let isin = t.instrument.isin { LabeledContent("ISIN", value: isin) }
+                if let e = t.instrument.expiry { LabeledContent("Expiry", value: Instrument.expiryFormatter.string(from: e)) }
+                if let k = t.instrument.strike { LabeledContent("Strike", value: plainPrice(k)) }
+                if let lot = t.instrument.lotSize, lot > 1 { LabeledContent("Lot size", value: lot.formatted()) }
+                if t.instrument.contractSize > 1 { LabeledContent("1 lot", value: "\(Int(t.instrument.contractSize).formatted()) units") }
+                Text(t.instrument.brokerHint).font(.caption).foregroundStyle(palette.textSecondary)
+            } header: {
+                Text("Product — find exactly this at your broker")
+            }
+
+            Section {
                 if t.status == .upcoming || t.status == .open {
                     Button { sheet = .entry } label: { Label(t.status == .upcoming ? "I entered this trade" : "Add to position", systemImage: "arrow.down.to.line") }
                 }
@@ -182,7 +201,7 @@ struct TradeDetailView: View {
                     .font(.caption).foregroundStyle(palette.textSecondary)
             }
         }
-        .navigationTitle(t.instrument.symbol)
+        .navigationTitle(t.instrument.fullSymbol)
         .sheet(item: $sheet) { kind in FillSheet(kind: kind, trade: t, price: price) }
         .sheet(item: $editingFill) { f in FillSheet(kind: f.kind == .entry ? .entry : .exit, trade: t, price: price, editing: f) }
         .sheet(isPresented: $editPlan) { EditPlanSheet(trade: t) }

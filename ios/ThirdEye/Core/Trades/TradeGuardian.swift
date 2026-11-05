@@ -114,7 +114,7 @@ final class TradeGuardian {
         guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
         let content = UNMutableNotificationContent()
         let icon = check.status == .broken ? "⛔" : check.status == .weakened ? "⚠️" : check.status == .strengthened ? "📈" : "👁"
-        content.title = "\(icon) \(t.instrument.symbol) · trade \(check.status.title.lowercased())"
+        content.title = "\(icon) \(t.instrument.alertName) · trade \(check.status.title.lowercased())"
         var lines: [String] = []
         if let ai = check.ai {
             lines.append("AI: \(ai.actionTitle)\(ai.newStop.map { " → stop \(FeatureEngine.plain($0))" } ?? ""). \(ai.summary)")

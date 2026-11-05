@@ -191,7 +191,8 @@ struct HotTradesView: View {
                 .frame(minWidth: 48, alignment: .leading)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(pick.instrument.symbol).font(.callout.weight(.semibold))
+                    Text(pick.instrument.fullSymbol).font(.callout.weight(.semibold))
+                    Chip(text: pick.instrument.exchangeBadge, color: palette.textSecondary)
                     statusChip(pick)
                     if let v = pick.verdict.flatMap(Verdict.init(rawValue:)), pick.status == .hot {
                         Text(v.title).font(.caption).foregroundStyle(palette.textSecondary)

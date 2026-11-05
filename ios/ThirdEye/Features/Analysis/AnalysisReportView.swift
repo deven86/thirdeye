@@ -74,6 +74,8 @@ struct AnalysisReportView: View {
 
     private var scoreCard: some View {
         VStack(spacing: 10) {
+            Text("\(run.instrument.fullSymbol) · \(run.instrument.identityLine)")
+                .font(.caption.weight(.semibold)).foregroundStyle(palette.textSecondary)
             ScoreGauge(score: run.composite ?? 500)
                 .frame(maxWidth: 340)
             HStack(spacing: 20) {

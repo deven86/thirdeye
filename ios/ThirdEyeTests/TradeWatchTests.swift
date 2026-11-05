@@ -290,3 +290,22 @@ struct ForexLotTests {
         #expect(t.status == .closed && t.closedAt != nil)
     }
 }
+
+@Suite("Product identity")
+struct ProductIdentityTests {
+    @Test func cashFutureAndOptionAreTellApart() {
+        let nse = Instrument(id: "NSE_EQ|INE849A01020", provider: .upstox, symbol: "TRENT", name: "TRENT LIMITED", exchange: "NSE",
+                             segment: "NSE_EQ", kind: .equity, currency: "INR", tickSize: 0.1)
+        #expect(nse.exchangeBadge == "NSE" && nse.isin == "INE849A01020")
+        #expect(nse.identityLine == "NSE · Stock · cash · INE849A01020")
+        #expect(nse.alertName == "TRENT (NSE)")
+        var bse = nse; bse.id = "BSE_EQ|INE849A01020"; bse.segment = "BSE_EQ"; bse.exchange = "BSE"
+        #expect(bse.exchangeBadge == "BSE" && bse.alertName == "TRENT (BSE)")
+        let fut = Instrument(id: "NSE_FO|12345", provider: .upstox, symbol: "TRENT FUT 24 NOV 26", name: "TRENT", exchange: "NSE",
+                             segment: "NSE_FO", kind: .future, currency: "INR", expiry: Date(timeIntervalSince1970: 1_795_000_000),
+                             lotSize: 100, underlying: "TRENT")
+        #expect(fut.fullSymbol.hasPrefix("TRENT FUT "))
+        #expect(fut.identityLine == "NSE · Future · lot 100")
+        #expect(fut.isin == nil)
+    }
+}

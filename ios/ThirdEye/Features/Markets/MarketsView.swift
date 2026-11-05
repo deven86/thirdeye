@@ -103,6 +103,7 @@ struct InstrumentRow: View {
                     .lineLimit(1)
             }
             Spacer()
+            Chip(text: instrument.exchangeBadge, color: palette.textSecondary)
             KindBadge(kind: instrument.kind)
         }
         .accessibilityElement(children: .combine)

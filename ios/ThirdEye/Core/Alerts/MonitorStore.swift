@@ -92,7 +92,7 @@ nonisolated struct MonitorWatchTrade: Codable, Hashable, Sendable {
         let summary = TradeMath.summary(t, lastPrice: nil)
         let booked = Set(t.fills.compactMap(\.takeProfitStage))
         return MonitorWatchTrade(
-            id: t.id.uuidString, symbol: t.instrument.symbol, provider: t.instrument.provider.rawValue,
+            id: t.id.uuidString, symbol: t.instrument.alertName, provider: t.instrument.provider.rawValue,
             providerKey: t.instrument.providerKey, exchange: t.instrument.exchange, segment: t.instrument.segment,
             kind: t.instrument.kind.rawValue, currency: t.instrument.currency, side: t.side, status: t.status.rawValue,
             mode: t.mode.rawValue, entryLow: t.plannedEntryLow, entryHigh: t.plannedEntryHigh, stop: t.stopLoss,

@@ -12,9 +12,9 @@ struct AnalysisRow: View {
                 .foregroundStyle(palette.color(forComposite: run.composite ?? 500))
                 .frame(minWidth: 48, alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(run.instrument.symbol) · \(verdict.title)\(run.grade.map { " · \($0)" } ?? "")\(verdict == .noTrade && run.lean != nil ? " · Watch" : "")")
+                Text("\(run.instrument.fullSymbol) · \(verdict.title)\(run.grade.map { " · \($0)" } ?? "")\(verdict == .noTrade && run.lean != nil ? " · Watch" : "")")
                     .font(.callout.weight(.semibold)).foregroundStyle(palette.textPrimary)
-                Text("\(run.profile.title) · \(run.startedAt.formatted(date: .abbreviated, time: .shortened))")
+                Text("\(run.instrument.exchangeBadge) \(run.instrument.kind.title) · \(run.profile.title) · \(run.startedAt.formatted(date: .abbreviated, time: .shortened))")
                     .font(.caption).foregroundStyle(palette.textSecondary)
             }
             Spacer()

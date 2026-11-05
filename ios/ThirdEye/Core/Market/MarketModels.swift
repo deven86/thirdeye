@@ -68,6 +68,91 @@ nonisolated struct Instrument: Identifiable, Hashable, Codable, Sendable {
         }
     }
 
+    // MARK: Identity — so a trade is never ambiguous (TRENT on NSE vs BSE vs its futures and options)
+
+    /// Short exchange badge: NSE, BSE, MCX, Binance, FX, US.
+    var exchangeBadge: String {
+        switch provider {
+        case .upstox: segment.hasPrefix("MCX") ? "MCX" : segment.hasPrefix("BSE") || segment.hasPrefix("BCD") ? "BSE" : "NSE"
+        case .binance: "Binance"
+        case .twelveData: kind == .forex || kind == .commodity ? "FX" : exchange.isEmpty ? "US" : exchange
+        }
+    }
+
+    /// Market segment in plain words.
+    var segmentTitle: String {
+        switch segment {
+        case "NSE_EQ", "BSE_EQ": "Cash market (stocks / ETFs)"
+        case "NSE_FO", "BSE_FO": "Equity derivatives (F&O)"
+        case "MCX_FO", "NSE_COM": "Commodity derivatives"
+        case "NCD_FO", "BCD_FO": "Currency derivatives"
+        case "NSE_INDEX", "BSE_INDEX": "Index (not tradable itself)"
+        case "CRYPTO": "Crypto spot"
+        case "FOREX": kind == .forex ? "Forex spot" : "Metals spot"
+        default: segment
+        }
+    }
+
+    /// The name a broker shows: TRENT · TRENT FUT 25 Nov 26 · TRENT 3200 CE 25 Nov 26.
+    var fullSymbol: String {
+        let base = underlying ?? symbol
+        let exp = expiry.map { " " + Instrument.expiryFormatter.string(from: $0) } ?? ""
+        switch kind {
+        case .future: return "\(base) FUT\(exp)"
+        case .option:
+            let k = strike.map { $0.formatted(.number.precision(.fractionLength(0...2)).grouping(.never)) } ?? ""
+            return "\(base) \(k) \(optionType ?? "")\(exp)"
+        default: return symbol
+        }
+    }
+
+    /// One line that identifies the product exactly: "TRENT · NSE · Stock (cash)".
+    var identityLine: String {
+        var parts = [exchangeBadge]
+        switch kind {
+        case .equity: parts.append(segment.hasSuffix("_EQ") ? "Stock · cash" : "Stock")
+        case .future, .option: parts.append(kind.title + (lotSize.map { $0 > 1 ? " · lot \(Int($0))" : "" } ?? ""))
+        default: parts.append(kind.title)
+        }
+        if let isin { parts.append(isin) }
+        return parts.joined(separator: " · ")
+    }
+
+    /// ISIN for Indian cash-market products (from the Upstox key, e.g. NSE_EQ|INE849A01020).
+    var isin: String? {
+        guard provider == .upstox, segment.hasSuffix("_EQ"), let code = id.split(separator: "|").last,
+              code.count == 12, code.hasPrefix("IN") else { return nil }
+        return String(code)
+    }
+
+    /// Name for alerts and the Lock Screen: adds the exchange where it matters.
+    var alertName: String {
+        provider == .upstox ? "\(fullSymbol) (\(exchangeBadge))" : symbol
+    }
+
+    /// Where to find exactly this product at a broker.
+    var brokerHint: String {
+        switch provider {
+        case .upstox:
+            switch kind {
+            case .equity, .etf:
+                return "Search \(symbol) and pick the \(exchangeBadge) row\(isin.map { " (ISIN \($0))" } ?? ""). The \(exchangeBadge == "NSE" ? "BSE" : "NSE") listing is the same company at a slightly different price — use the one you analysed."
+            case .future:
+                return "Search \(underlying ?? symbol), pick the \(exchangeBadge) future expiring \(expiry.map { Instrument.expiryFormatter.string(from: $0) } ?? "—")\(lotSize.map { $0 > 1 ? ", 1 lot = \(Int($0)) shares" : "" } ?? "")."
+            case .option:
+                return "Search \(fullSymbol) on \(exchangeBadge)\(lotSize.map { $0 > 1 ? ", 1 lot = \(Int($0))" : "" } ?? "")."
+            case .index:
+                return "An index can't be bought itself — trade its future, an option or an index ETF."
+            default:
+                return "Search \(fullSymbol) on \(exchangeBadge)."
+            }
+        case .binance: return "Binance → Spot → \(symbol)."
+        case .twelveData:
+            if kind == .forex || kind == .commodity { return "MetaTrader / your FX broker: \(symbol.replacingOccurrences(of: "/", with: "")). Quantity in lots (1 lot = \(Int(contractSize).formatted()) units)." }
+            return "Search \(symbol) on your US broker."
+        }
+    }
+
     /// "lots" when quantity is counted in lots (forex, gold, silver), otherwise "units".
     var quantityUnit: String { contractSize > 1 ? "lots" : "units" }
 

@@ -180,7 +180,7 @@ struct PortfolioView: View {
                 ForEach(holdings) { h in
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(h.trade.instrument.symbol).font(.callout.weight(.semibold))
+                            Text("\(h.trade.instrument.fullSymbol) · \(h.trade.instrument.exchangeBadge)").font(.callout.weight(.semibold))
                             Text("\(h.trade.side.uppercased()) \(h.openQuantity.formatted()) @ \(plainPrice(h.averageEntry))")
                                 .font(.caption.monospacedDigit()).foregroundStyle(palette.textSecondary)
                         }

@@ -103,6 +103,10 @@ struct InstrumentDetailView: View {
                 .font(.subheadline)
                 .foregroundStyle(palette.textSecondary)
                 .lineLimit(1)
+            Text(instrument.identityLine)
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(palette.textSecondary)
+                .lineLimit(1)
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(shown.map { format($0.close) } ?? "—")
                     .font(.system(size: 34, weight: .bold, design: .rounded))
@@ -202,13 +206,17 @@ struct InstrumentDetailView: View {
     private var detailsCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Details").font(.headline).foregroundStyle(palette.textPrimary)
-            detail("Exchange", instrument.exchange)
+            detail("Exchange", instrument.exchangeBadge)
+            detail("Market", instrument.segmentTitle)
             detail("Type", instrument.kind.title)
+            detail("Trading symbol", instrument.fullSymbol)
+            if let isin = instrument.isin { detail("ISIN", isin) }
             if let expiry = instrument.expiry { detail("Expiry", Instrument.expiryFormatter.string(from: expiry)) }
             if let strike = instrument.strike { detail("Strike", format(strike)) }
             if let lot = instrument.lotSize, lot > 1 { detail("Lot size", lot.formatted()) }
             if let tick = instrument.tickSize { detail("Tick size", format(tick)) }
             if let underlying = instrument.underlying { detail("Underlying", underlying) }
+            Text(instrument.brokerHint).font(.caption).foregroundStyle(palette.textSecondary)
             if let first = candles.first?.time, let last = candles.last?.time {
                 detail("Bars loaded", "\(candles.count) · \(first.formatted(date: .abbreviated, time: .omitted)) → \(last.formatted(date: .abbreviated, time: .omitted))")
             }

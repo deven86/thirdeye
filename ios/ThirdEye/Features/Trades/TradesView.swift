@@ -84,7 +84,8 @@ struct TradeRow: View {
         let signal = TradeMath.signal(trade, lastPrice: price)
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(trade.instrument.symbol).font(.body.weight(.semibold))
+                Text(trade.instrument.fullSymbol).font(.body.weight(.semibold)).lineLimit(1)
+                Chip(text: trade.instrument.exchangeBadge, color: palette.textSecondary)
                 Text(trade.side.uppercased())
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(trade.isLong ? palette.up : palette.down)
