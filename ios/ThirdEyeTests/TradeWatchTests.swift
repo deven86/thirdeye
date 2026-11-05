@@ -230,3 +230,15 @@ struct ActionPlanTests {
         #expect(ActionPlanner.gradeFactor("B") == 0.5)
     }
 }
+
+@Suite("Monitor address")
+struct MonitorAddressTests {
+    @Test func tailscaleIPUsesTheHTTPFallbackPort() {
+        #expect(MonitorStore.isTailscaleIP("100.108.39.72"))
+        #expect(!MonitorStore.isTailscaleIP("192.168.1.5"))
+        #expect(!MonitorStore.isTailscaleIP("100.200.1.1"), "outside 100.64.0.0/10")
+        #expect(!MonitorStore.isTailscaleIP("deven-pc.taildd20dc.ts.net"))
+        #expect(MonitorStore.url("100.108.39.72", "/healthz")?.absoluteString == "http://100.108.39.72:8788/healthz")
+        #expect(MonitorStore.url("deven-pc.taildd20dc.ts.net", "/healthz")?.absoluteString == "https://deven-pc.taildd20dc.ts.net/healthz")
+    }
+}

@@ -190,7 +190,36 @@ func cliPair(dataDir, addr string) error {
 	}
 	fmt.Printf("\nIn Third Eye → Settings → Alerts, enter:\n\n  PC address:    %s\n  Pairing code:  %s   (valid until %s)\n\n",
 		host, r.Code, r.Expires.Local().Format("15:04"))
+	if ip := tailscaleIPv4(); ip != "" {
+		fmt.Printf("  If the iPhone says the name can't be found, type this address instead: %s\n\n", ip)
+	}
 	return nil
+}
+
+// tailscaleIPv4 is this PC's Tailscale address (100.x.y.z): the fallback when the iPhone can't resolve the name.
+func tailscaleIPv4() string {
+	exe := tailscaleExe()
+	if exe == "" {
+		return ""
+	}
+	out, err := exec.Command(exe, "status", "--json").Output()
+	if err != nil {
+		return ""
+	}
+	var st struct {
+		Self struct {
+			TailscaleIPs []string `json:"TailscaleIPs"`
+		} `json:"Self"`
+	}
+	if json.Unmarshal(out, &st) != nil {
+		return ""
+	}
+	for _, ip := range st.Self.TailscaleIPs {
+		if strings.Count(ip, ".") == 3 {
+			return ip
+		}
+	}
+	return ""
 }
 
 func cliStatus(dataDir, addr string) error {

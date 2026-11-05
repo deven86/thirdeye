@@ -226,11 +226,22 @@ func install(dataDir, addr string) error {
 		if err != nil || strings.Contains(text, "not enabled") || strings.Contains(text, "login.tailscale.com") {
 			fmt.Println("     → If a link is shown above, open it, allow HTTPS for your tailnet, then run install again.")
 		}
+		// Second door by IP address (http://100.x.y.z:8788), for iPhones that can't resolve the name.
+		// Still private and encrypted: only your tailnet can reach it, over Tailscale's WireGuard tunnel.
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 25*time.Second)
+		out2, err2 := exec.CommandContext(ctx2, ts, "serve", "--bg", "--tcp="+ipPort, "tcp://127.0.0.1:"+port).CombinedOutput()
+		cancel2()
+		if err2 != nil {
+			fmt.Println("     (IP access not set up: " + strings.TrimSpace(string(out2)) + ")")
+		}
 	}
 
 	fmt.Println("4/4  Pairing code for the app:")
 	return cliPair(dataDir, addr)
 }
+
+// ipPort is the Tailscale port for the by-IP fallback (plain HTTP inside the encrypted tailnet).
+const ipPort = "8788"
 
 func uninstall() error {
 	_ = exec.Command("schtasks", "/End", "/TN", taskName).Run()

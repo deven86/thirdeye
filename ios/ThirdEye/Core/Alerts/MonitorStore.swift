@@ -219,6 +219,19 @@ final class MonitorStore {
         return s.now.timeIntervalSince(s.lastLoopAt) < 15 * 60
     }
 
+    /// A Tailscale address (100.64.0.0/10), typed when the iPhone can't resolve the PC's name.
+    nonisolated static func isTailscaleIP(_ s: String) -> Bool {
+        let parts = s.split(separator: ".").compactMap { Int($0) }
+        guard parts.count == 4, s.split(separator: ".").count == 4, parts.allSatisfy({ (0...255).contains($0) }) else { return false }
+        return parts[0] == 100 && (64...127).contains(parts[1])
+    }
+
+    /// The name → HTTPS (Tailscale certificate). A Tailscale IP → plain HTTP on port 8788, which is still
+    /// encrypted end to end by Tailscale's WireGuard tunnel and reachable only from your own devices.
+    nonisolated static func url(_ target: String, _ path: String) -> URL? {
+        isTailscaleIP(target) ? URL(string: "http://\(target):8788\(path)") : URL(string: "https://\(target)\(path)")
+    }
+
     nonisolated static func normalize(_ raw: String) -> String {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         for p in ["https://", "http://"] where s.hasPrefix(p) { s.removeFirst(p.count) }
@@ -257,7 +270,7 @@ final class MonitorStore {
     private func request(_ method: String, _ path: String, body: (any Encodable)? = nil, auth: Bool = true,
                          host: String? = nil) async throws -> Data {
         let target = host ?? address
-        guard !target.isEmpty, let url = URL(string: "https://\(target)\(path)") else { throw MonitorError.notPaired }
+        guard !target.isEmpty, let url = Self.url(target, path) else { throw MonitorError.notPaired }
         var req = URLRequest(url: url, timeoutInterval: 20)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")

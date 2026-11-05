@@ -89,7 +89,7 @@ struct AlertsSettingsView: View {
 
     private var pairSection: some View {
         Section {
-            TextField("PC address, e.g. my-pc.tail1234.ts.net", text: $address)
+            TextField("PC address: my-pc.tail1234.ts.net or 100.x.y.z", text: $address)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .keyboardType(.URL)
@@ -107,7 +107,7 @@ struct AlertsSettingsView: View {
         } header: {
             Text("Connect your PC")
         } footer: {
-            Text("On the PC, `thirdeye-monitor install` (or `thirdeye-monitor pair`) shows both. Tailscale must be on, on this iPhone and the PC.")
+            Text("On the PC, `thirdeye-monitor install` (or `thirdeye-monitor pair`) shows both. Tailscale must be on, on this iPhone and the PC. If the name can't be found, type the PC's Tailscale IP (100.…) instead.")
         }
     }
 
