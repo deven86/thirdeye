@@ -32,7 +32,9 @@ The key file must end up on the PC, so doing this part on the PC is easiest.
 4. Left menu **Keys** → **+** (blue plus).
    - Key Name: `Third Eye Alerts`
    - Tick **Apple Push Notifications service (APNs)** → **Configure** →
-     Environment **Sandbox & Production**, Key Restriction **Team Scoped (All Topics)** → **Save**.
+     Environment **Production** (or **Sandbox & Production**) — **not** the default *Sandbox*, which
+     TestFlight builds reject with `BadEnvironmentKeyInToken`. Key Restriction **Topic Specific** →
+     `com.jondhale.thirdeye` → **Save**. (Made a Sandbox key by mistake? Open it → **Create Related Key** → Production.)
    - **Continue** → **Register** → **Download**.
 5. You get a file named like `AuthKey_AB12CD34EF.p8`. **Apple lets you download it only once** —
    keep a backup copy somewhere safe (e.g. a password manager). Never share it.
@@ -100,6 +102,8 @@ the PC automatically.
 | You see | Do this |
 |---|---|
 | "Can't reach your PC" | Tailscale **Connect** on, on both the iPhone and the PC; PC awake; run `thirdeye-monitor status` on the PC |
+| `APNs 403 BadEnvironmentKeyInToken` | the key is Sandbox-only: Keys → open it → **Create Related Key** → **Production** → put the new `.p8` in `C:\ThirdEye` → `schtasks /End /TN "ThirdEye Monitor"` then `/Run` |
+| iPhone: "hostname could not be found" | type the PC's Tailscale IP (`100.x.y.z`, shown by `thirdeye-monitor pair`) instead of the name. Needs monitor 0.9.2+, or once: `tailscale serve --bg --tcp=8788 tcp://127.0.0.1:8787` |
 | Push: "no key" | put `AuthKey_….p8` in `C:\ThirdEye` (it is picked up within a minute, then renamed to `.imported`) |
 | "This build can't receive push yet" | Part A step 3 wasn't saved, or you're on a build older than 0.9.0 |
 | Test alert "not sent: … BadDeviceToken" | delete and reinstall Third Eye from TestFlight, then connect again |
