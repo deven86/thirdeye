@@ -6,9 +6,12 @@ struct TradeDetailView: View {
     @Environment(AnalysisStore.self) private var analyses
     @Environment(AppSettings.self) private var settings
     @Environment(TradeGuardian.self) private var guardian
+    @Environment(LiveActivityManager.self) private var live
+    @Environment(MonitorStore.self) private var monitor
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @State private var liveTick = 0
     let tradeID: UUID
     let prices: PriceBook
 
@@ -118,6 +121,28 @@ struct TradeDetailView: View {
                 }
             }
 
+            if t.status == .open || t.status == .upcoming {
+                let showing = liveTick >= 0 && live.isShowing(t.id)
+                Section {
+                    Button {
+                        Task {
+                            if showing { await live.stop(t.id, monitor: monitor) }
+                            else { live.start(t, price: price, monitor: monitor) }
+                            liveTick += 1
+                        }
+                    } label: {
+                        Label(showing ? "Remove from Lock Screen" : "Show on Lock Screen", systemImage: showing ? "lock.slash" : "lock.iphone")
+                    }
+                    if let err = live.lastError { Text(err).font(.caption).foregroundStyle(palette.warning) }
+                } header: {
+                    Text("Lock Screen & Dynamic Island")
+                } footer: {
+                    Text(monitor.isPaired
+                         ? "Live price, result in R and distance to the stop and next target. Your PC keeps it updated while Third Eye is closed. iOS ends it after about 8 hours — opening Third Eye starts it again."
+                         : "Live price and result in R while Third Eye is open. Connect your PC (Settings → Alerts) to keep it updated while the app is closed.")
+                }
+            }
+
             if !t.notes.isEmpty { Section("Notes") { Text(t.notes) } }
 
             Section {
@@ -166,6 +191,7 @@ struct TradeDetailView: View {
         .task {
             while !Task.isCancelled && (t.status == .open || t.status == .upcoming) {
                 await prices.refresh([t.instrument], market: market)
+                if let p = prices.price(t.instrument), let fresh = store.trade(id: t.id) { await live.update(fresh, price: p) }
                 try? await Task.sleep(for: .seconds(30))
             }
         }
@@ -296,6 +322,8 @@ extension TradeDetailView {
 struct FillSheet: View {
     enum Kind: String, Identifiable { case entry, exit; var id: String { rawValue } }
     @Environment(TradeStore.self) private var store
+    @Environment(LiveActivityManager.self) private var live
+    @Environment(MonitorStore.self) private var monitor
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     let kind: Kind
@@ -370,6 +398,10 @@ struct FillSheet: View {
         let fees = num(feesText) ?? 0
         if kind == .entry {
             store.recordEntry(trade, price: p, quantity: q, fees: fees, date: date)
+            // First entry: put the trade on the Lock Screen (the user can remove it on the trade screen).
+            if trade.status == .upcoming, let opened = store.trade(id: trade.id) {
+                live.start(opened, price: p, monitor: monitor)
+            }
         } else {
             store.recordExit(trade, price: p, quantity: q, fees: fees, date: date, takeProfitStage: tpStage, note: note.isEmpty ? nil : note)
         }

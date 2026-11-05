@@ -242,3 +242,17 @@ struct MonitorAddressTests {
         #expect(MonitorStore.url("deven-pc.taildd20dc.ts.net", "/healthz")?.absoluteString == "https://deven-pc.taildd20dc.ts.net/healthz")
     }
 }
+
+@Suite("Lock Screen card")
+struct LiveActivityStateTests {
+    @Test func matchesThePCMonitorsMaths() {
+        let t = trade()   // long, entry 100, stop 90, TP1 110 / TP2 120 / TP3 130
+        let s = LiveActivityManager.state(t, price: 105)
+        #expect(s.status == "open" && s.r == 0.5 && s.nextTargetStage == 1)
+        #expect(s.progress == 0.75, "(105 − 90) / (110 − 90), same as monitor/live.go")
+        #expect(LiveActivityManager.state(t, price: 111).status == "target")
+        #expect(LiveActivityManager.state(t, price: 92).status == "nearStop")
+        #expect(LiveActivityManager.state(t, price: 89).status == "stop")
+        #expect(LiveActivityManager.state(trade(open: false), price: 100).status == "inZone")
+    }
+}

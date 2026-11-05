@@ -13,6 +13,7 @@ struct ThirdEyeApp: App {
     @State private var hotScans = HotScanStore()
     @State private var outcomes = OutcomeStore()
     @State private var guardian = TradeGuardian()
+    @State private var live = LiveActivityManager.shared
 
     var body: some Scene {
         WindowGroup {
@@ -29,6 +30,7 @@ struct ThirdEyeApp: App {
             .environment(monitor)
             .environment(outcomes)
             .environment(guardian)
+            .environment(live)
         }
     }
 }
@@ -44,6 +46,7 @@ struct RootView: View {
     @Environment(OutcomeStore.self) private var outcomes
     @Environment(AnalysisStore.self) private var analyses
     @Environment(TradeGuardian.self) private var guardian
+    @Environment(LiveActivityManager.self) private var live
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -68,10 +71,14 @@ struct RootView: View {
             if phase == .active {
                 Task { await monitor.refreshAll(trades: trades.trades, market: market) }
                 Task { await outcomes.gradeDue(analyses.runs, market: market) }
+                Task { await live.reconcile(trades.trades, prices: nil, monitor: monitor) }
             }
         }
         // Keep the PC monitor's watch list in step with every trade change (debounced).
-        .onChange(of: trades.trades) { _, all in monitor.scheduleSync(all) }
+        .onChange(of: trades.trades) { _, all in
+            monitor.scheduleSync(all)
+            Task { await live.reconcile(all, prices: nil, monitor: monitor) }
+        }
         .onChange(of: market.upstoxTokenExpiry) { _, _ in Task { await monitor.syncCredentials(market: market) } }
         .onChange(of: market.hasTwelveDataKey) { _, _ in Task { await monitor.syncCredentials(market: market) } }
         .task { await monitor.refreshAll(trades: trades.trades, market: market) }

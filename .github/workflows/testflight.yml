@@ -30,7 +30,7 @@ jobs:
       TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-      APP_IDS: com.jondhale.thirdeye
+      APP_IDS: com.jondhale.thirdeye,com.jondhale.thirdeye.live
     steps:
       - uses: actions/checkout@v5
 

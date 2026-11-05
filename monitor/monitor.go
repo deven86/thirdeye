@@ -30,12 +30,15 @@ type Monitor struct {
 	// Overridable for tests.
 	fetch func(ctx context.Context, provider string, keys []string, secret string) (map[string]float64, error)
 	send  func(ctx context.Context, d Device, al Alert, now time.Time) error
+	// sendLive pushes one Live Activity update.
+	sendLive func(ctx context.Context, la LiveActivity, body []byte, priority int, now time.Time) error
 }
 
 func NewMonitor(store *Store, dataDir, exeDir string) *Monitor {
 	m := &Monitor{store: store, dataDir: dataDir, exeDir: exeDir, startedAt: time.Now(), providers: map[string]string{}}
 	m.fetch = defaultFetch
 	m.send = m.sendAPNs
+	m.sendLive = m.sendLiveAPNs
 	return m
 }
 
@@ -161,6 +164,7 @@ func (m *Monitor) Tick(ctx context.Context, now time.Time) {
 
 	st.Lock()
 	var alerts []Alert
+	var lives []liveJob
 	for provider, trades := range byProvider {
 		for _, t := range trades {
 			price, ok := prices[provider+"|"+t.ProviderKey]
@@ -173,6 +177,17 @@ func (m *Monitor) Tick(ctx context.Context, now time.Time) {
 				st.S.Memory[t.ID] = mem
 			}
 			alerts = append(alerts, Evaluate(t, price, now, mem, settings, loc)...)
+			if la := st.S.LiveActivities[t.ID]; la != nil && la.Token != "" {
+				if now.Sub(la.StartedAt) > liveMaxAge {
+					delete(st.S.LiveActivities, t.ID) // iOS has ended it by now
+					continue
+				}
+				state := BuildLiveState(t, price, now)
+				if d := DecideLive(*la, state, now); d.Send {
+					lives = append(lives, liveJob{la: *la, body: LivePayload(state, "update", d.Alert, t.Symbol, now),
+						priority: d.Priority, status: state.Status, price: price})
+				}
+			}
 		}
 	}
 	// Morning/evening digest, within 30 minutes after each configured time.
@@ -206,6 +221,9 @@ func (m *Monitor) Tick(ctx context.Context, now time.Time) {
 
 	if len(alerts) > 0 {
 		m.deliver(ctx, devices, alerts, now)
+	}
+	if len(lives) > 0 {
+		m.deliverLive(ctx, lives, now)
 	}
 	m.mu.Lock()
 	m.lastLoopAt = now
@@ -311,31 +329,89 @@ func (m *Monitor) deliver(ctx context.Context, devices []Device, alerts []Alert,
 	}
 }
 
+type liveJob struct {
+	la       LiveActivity
+	body     []byte
+	priority int
+	status   string
+	price    float64
+}
+
+// deliverLive pushes Live Activity updates and records the result (drops activities Apple says are gone).
+func (m *Monitor) deliverLive(ctx context.Context, jobs []liveJob, now time.Time) {
+	type result struct {
+		job liveJob
+		err error
+	}
+	var results []result
+	for _, j := range jobs {
+		cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		err := m.sendLive(cctx, j.la, j.body, j.priority, now)
+		cancel()
+		results = append(results, result{j, err})
+	}
+	m.store.Lock()
+	defer m.store.Unlock()
+	for _, r := range results {
+		la := m.store.S.LiveActivities[r.job.la.TradeID]
+		if la == nil || la.Token != r.job.la.Token {
+			continue // replaced or removed meanwhile
+		}
+		switch {
+		case r.err == nil:
+			la.LastSent, la.LastStatus, la.LastPrice, la.LastError = now, r.job.status, r.job.price, ""
+		case errors.Is(r.err, ErrDeviceGone):
+			delete(m.store.S.LiveActivities, r.job.la.TradeID)
+		default:
+			la.LastError = r.err.Error()
+			log.Printf("live activity %s: %v", r.job.la.TradeID, r.err)
+		}
+	}
+}
+
 // sendAPNs builds the APNs sender lazily from the imported key and the team ID the app reported.
 func (m *Monitor) sendAPNs(ctx context.Context, d Device, al Alert, now time.Time) error {
+	sender, err := m.sender(d.TeamID)
+	if err != nil {
+		return err
+	}
+	return sender.Send(ctx, d, al, now)
+}
+
+func (m *Monitor) sendLiveAPNs(ctx context.Context, la LiveActivity, body []byte, priority int, now time.Time) error {
+	sender, err := m.sender(la.TeamID)
+	if err != nil {
+		return err
+	}
+	return sender.SendLive(ctx, la, body, priority, now)
+}
+
+// sender returns the APNs sender for a team, building it from the imported key when needed.
+func (m *Monitor) sender(teamID string) (*APNs, error) {
 	m.mu.Lock()
 	sender := m.apns
 	m.mu.Unlock()
+	d := struct{ TeamID string }{teamID}
 	if sender == nil || sender.TeamID != d.TeamID {
 		m.store.Lock()
 		pemKey, keyID := m.store.Secret("apnsKey"), m.store.S.APNsKeyID
 		m.store.Unlock()
 		if pemKey == "" {
-			return errors.New("no APNs key yet — put AuthKey_XXXXXXXXXX.p8 next to thirdeye-monitor.exe")
+			return nil, errors.New("no APNs key yet — put AuthKey_XXXXXXXXXX.p8 next to thirdeye-monitor.exe")
 		}
 		if d.TeamID == "" {
-			return errors.New("the app has not reported its team ID yet — open Third Eye once")
+			return nil, errors.New("the app has not reported its team ID yet — open Third Eye once")
 		}
 		key, err := ParseP8([]byte(pemKey))
 		if err != nil {
-			return fmt.Errorf("APNs key unreadable: %w", err)
+			return nil, fmt.Errorf("APNs key unreadable: %w", err)
 		}
 		sender = &APNs{KeyID: keyID, TeamID: d.TeamID, Key: key}
 		m.mu.Lock()
 		m.apns = sender
 		m.mu.Unlock()
 	}
-	return sender.Send(ctx, d, al, now)
+	return sender, nil
 }
 
 // importAPNsKey looks for AuthKey_<KEYID>.p8 next to the program or in the data folder, stores it

@@ -108,6 +108,14 @@ nonisolated struct MonitorWatchTrade: Codable, Hashable, Sendable {
 
 nonisolated struct MonitorPairRequest: Encodable, Sendable { var code: String; var device: String }
 
+nonisolated struct MonitorLiveActivityRequest: Encodable, Sendable {
+    var tradeID: String
+    var token: String
+    var environment: String
+    var bundleID: String
+    var teamID: String
+}
+
 nonisolated struct MonitorDeviceRequest: Encodable, Sendable {
     var installID: String
     var token: String
@@ -354,6 +362,29 @@ final class MonitorStore {
                             bundleID: Bundle.main.bundleIdentifier ?? "com.jondhale.thirdeye")
         do { _ = try await request("PUT", "/v1/device", body: device); syncError = nil }
         catch { syncError = error.localizedDescription }
+    }
+
+    // MARK: Live Activities
+
+    /// Hands a Lock Screen card's push token to the PC, which then updates the card while the app is closed.
+    func registerLiveActivity(tradeID: String, token: String) async {
+        guard isPaired else { return }
+        #if DEBUG
+        let environment = "development"
+        #else
+        let environment = "production"
+        #endif
+        let prefix = (Bundle.main.object(forInfoDictionaryKey: "AppIdentifierPrefix") as? String) ?? ""
+        let body = MonitorLiveActivityRequest(tradeID: tradeID, token: token, environment: environment,
+                                              bundleID: Bundle.main.bundleIdentifier ?? "com.jondhale.thirdeye",
+                                              teamID: prefix.trimmingCharacters(in: CharacterSet(charactersIn: ".")))
+        do { _ = try await request("PUT", "/v1/live-activity", body: body) }
+        catch { syncError = "Lock Screen card: \(error.localizedDescription)" }
+    }
+
+    func endLiveActivity(tradeID: String) async {
+        guard isPaired else { return }
+        _ = try? await request("DELETE", "/v1/live-activity/\(tradeID)")
     }
 
     // MARK: Sync

@@ -29,6 +29,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /v1/watch", s.auth(s.watch))
 	mux.HandleFunc("PUT /v1/credentials", s.auth(s.credentials))
 	mux.HandleFunc("POST /v1/test-alert", s.auth(s.testAlert))
+	mux.HandleFunc("PUT /v1/live-activity", s.auth(s.liveActivity))
+	mux.HandleFunc("DELETE /v1/live-activity/{id}", s.auth(s.endLiveActivity))
 	mux.HandleFunc("POST /v1/admin/pair-code", s.admin(s.pairCode))
 	mux.HandleFunc("GET /v1/admin/status", s.admin(s.status))
 	return limitBody(mux)
@@ -194,6 +196,11 @@ func (s *Server) watch(w http.ResponseWriter, r *http.Request) {
 			delete(st.S.Memory, id)
 		}
 	}
+	for id := range st.S.LiveActivities {
+		if !keep[id] {
+			delete(st.S.LiveActivities, id) // trade closed: the app ends the activity itself
+		}
+	}
 	_ = st.Save()
 	st.Unlock()
 	writeJSON(w, http.StatusOK, map[string]int{"watching": len(valid)})
@@ -258,4 +265,40 @@ func (s *Server) pairCode(w http.ResponseWriter, r *http.Request) {
 	_ = st.Save()
 	st.Unlock()
 	writeJSON(w, http.StatusOK, map[string]any{"code": code, "expires": exp})
+}
+
+// liveActivity registers (or refreshes) the push token of a trade's Lock Screen activity.
+func (s *Server) liveActivity(w http.ResponseWriter, r *http.Request) {
+	var in LiveActivity
+	if err := decode(r, &in); err != nil || in.TradeID == "" || len(in.Token) < 32 {
+		fail(w, http.StatusBadRequest, "bad live activity")
+		return
+	}
+	if in.Environment != "development" {
+		in.Environment = "production"
+	}
+	st := s.mon.store
+	st.Lock()
+	old := st.S.LiveActivities[in.TradeID]
+	la := &LiveActivity{TradeID: in.TradeID, Token: in.Token, Environment: in.Environment, BundleID: in.BundleID,
+		TeamID: in.TeamID, StartedAt: s.now()}
+	if old != nil && old.Token == in.Token {
+		la.StartedAt, la.LastSent, la.LastStatus, la.LastPrice = old.StartedAt, old.LastSent, old.LastStatus, old.LastPrice
+	}
+	if !in.StartedAt.IsZero() && in.StartedAt.Before(s.now()) {
+		la.StartedAt = in.StartedAt
+	}
+	st.S.LiveActivities[in.TradeID] = la
+	_ = st.Save()
+	st.Unlock()
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *Server) endLiveActivity(w http.ResponseWriter, r *http.Request) {
+	st := s.mon.store
+	st.Lock()
+	delete(st.S.LiveActivities, r.PathValue("id"))
+	_ = st.Save()
+	st.Unlock()
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

@@ -26,23 +26,24 @@ type TokenEntry struct {
 
 // State is everything the monitor keeps on disk (state.json in the data folder).
 type State struct {
-	Version        int                  `json:"version"`
-	AdminKey       string               `json:"adminKey"`
-	PairCode       string               `json:"pairCode,omitempty"`
-	PairExpires    time.Time            `json:"pairExpires,omitempty"`
-	PairAttempts   int                  `json:"pairAttempts"`
-	Tokens         []TokenEntry         `json:"tokens"`
-	Devices        []Device             `json:"devices"`
-	Watch          []WatchTrade         `json:"watch"`
-	WatchUpdatedAt time.Time            `json:"watchUpdatedAt"`
-	Settings       Settings             `json:"settings"`
-	Memory         map[string]*Memory   `json:"memory"`
-	Alerts         []Alert              `json:"alerts"`
-	Secrets        map[string]string    `json:"secrets"` // name → base64(DPAPI-encrypted value)
-	APNsKeyID      string               `json:"apnsKeyID,omitempty"`
-	UpstoxIssued   time.Time            `json:"upstoxIssued,omitempty"`
-	LastSummary    map[string]time.Time `json:"lastSummary"`
-	LastLoginNag   time.Time            `json:"lastLoginNag"`
+	Version        int                      `json:"version"`
+	AdminKey       string                   `json:"adminKey"`
+	PairCode       string                   `json:"pairCode,omitempty"`
+	PairExpires    time.Time                `json:"pairExpires,omitempty"`
+	PairAttempts   int                      `json:"pairAttempts"`
+	Tokens         []TokenEntry             `json:"tokens"`
+	Devices        []Device                 `json:"devices"`
+	Watch          []WatchTrade             `json:"watch"`
+	WatchUpdatedAt time.Time                `json:"watchUpdatedAt"`
+	Settings       Settings                 `json:"settings"`
+	Memory         map[string]*Memory       `json:"memory"`
+	Alerts         []Alert                  `json:"alerts"`
+	Secrets        map[string]string        `json:"secrets"` // name → base64(DPAPI-encrypted value)
+	APNsKeyID      string                   `json:"apnsKeyID,omitempty"`
+	UpstoxIssued   time.Time                `json:"upstoxIssued,omitempty"`
+	LastSummary    map[string]time.Time     `json:"lastSummary"`
+	LastLoginNag   time.Time                `json:"lastLoginNag"`
+	LiveActivities map[string]*LiveActivity `json:"liveActivities"` // trade ID → Lock Screen activity
 }
 
 const maxAlerts = 200
@@ -71,6 +72,9 @@ func OpenStore(dir string) (*Store, error) {
 	}
 	if st.S.Secrets == nil {
 		st.S.Secrets = map[string]string{}
+	}
+	if st.S.LiveActivities == nil {
+		st.S.LiveActivities = map[string]*LiveActivity{}
 	}
 	if st.S.LastSummary == nil {
 		st.S.LastSummary = map[string]time.Time{}

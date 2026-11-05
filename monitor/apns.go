@@ -97,27 +97,42 @@ func Payload(al Alert) []byte {
 
 // Send delivers one alert to one device.
 func (a *APNs) Send(ctx context.Context, d Device, al Alert, now time.Time) error {
+	topic := d.BundleID
+	if topic == "" {
+		topic = "com.jondhale.thirdeye"
+	}
+	return a.post(ctx, d.Environment, d.Token, topic, "alert", 10, now.Add(time.Hour), Payload(al), now)
+}
+
+// SendLive updates (or ends) one Live Activity. The topic is the app's bundle ID + ".push-type.liveactivity".
+func (a *APNs) SendLive(ctx context.Context, la LiveActivity, body []byte, priority int, now time.Time) error {
+	bundle := la.BundleID
+	if bundle == "" {
+		bundle = "com.jondhale.thirdeye"
+	}
+	return a.post(ctx, la.Environment, la.Token, bundle+".push-type.liveactivity", "liveactivity", priority,
+		now.Add(15*time.Minute), body, now)
+}
+
+func (a *APNs) post(ctx context.Context, environment, token, topic, pushType string, priority int, expires time.Time,
+	body []byte, now time.Time) error {
 	jwt, err := a.Token(now)
 	if err != nil {
 		return err
 	}
 	host := "https://api.push.apple.com"
-	if d.Environment == "development" {
+	if environment == "development" {
 		host = "https://api.sandbox.push.apple.com"
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, host+"/3/device/"+d.Token, bytes.NewReader(Payload(al)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, host+"/3/device/"+token, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
-	topic := d.BundleID
-	if topic == "" {
-		topic = "com.jondhale.thirdeye"
-	}
 	req.Header.Set("authorization", "bearer "+jwt)
 	req.Header.Set("apns-topic", topic)
-	req.Header.Set("apns-push-type", "alert")
-	req.Header.Set("apns-priority", "10")
-	req.Header.Set("apns-expiration", fmt.Sprint(now.Add(time.Hour).Unix()))
+	req.Header.Set("apns-push-type", pushType)
+	req.Header.Set("apns-priority", fmt.Sprint(priority))
+	req.Header.Set("apns-expiration", fmt.Sprint(expires.Unix()))
 	client := a.Client
 	if client == nil {
 		client = &http.Client{Timeout: 20 * time.Second} // net/http negotiates HTTP/2 with Apple
@@ -135,7 +150,7 @@ func (a *APNs) Send(ctx context.Context, d Device, al Alert, now time.Time) erro
 		Reason string `json:"reason"`
 	}
 	_ = json.Unmarshal(b, &reason)
-	if resp.StatusCode == 410 || reason.Reason == "BadDeviceToken" || reason.Reason == "Unregistered" {
+	if resp.StatusCode == 410 || reason.Reason == "BadDeviceToken" || reason.Reason == "Unregistered" || reason.Reason == "ExpiredToken" {
 		return fmt.Errorf("%w (%s)", ErrDeviceGone, reason.Reason)
 	}
 	if reason.Reason == "ExpiredProviderToken" || reason.Reason == "InvalidProviderToken" {

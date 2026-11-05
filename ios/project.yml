@@ -12,7 +12,7 @@ settings:
     SWIFT_VERSION: "6.0"
     SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
     SWIFT_APPROACHABLE_CONCURRENCY: YES
-    MARKETING_VERSION: "0.9.3"
+    MARKETING_VERSION: "0.10.0"
     CURRENT_PROJECT_VERSION: "1"
     VERSIONING_SYSTEM: apple-generic
     DEVELOPMENT_TEAM: ""  # passed in by CI from the APPLE_TEAM_ID secret
@@ -25,6 +25,9 @@ targets:
     supportedDestinations: [iOS]
     sources:
       - path: ThirdEye
+      - path: Shared
+    dependencies:
+      - target: ThirdEyeLive
     info:
       path: ThirdEye/Info.plist
       properties:
@@ -36,6 +39,8 @@ targets:
         NSFaceIDUsageDescription: Third Eye uses Face ID to keep your trades, keys and analysis private.
         AppIdentifierPrefix: $(AppIdentifierPrefix)
         UILaunchScreen: {}
+        NSSupportsLiveActivities: true
+        NSSupportsLiveActivitiesFrequentUpdates: true
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         UIApplicationSceneManifest:
@@ -67,6 +72,35 @@ targets:
           CODE_SIGN_IDENTITY: "Apple Distribution"
           PROVISIONING_PROFILE_SPECIFIER: "match AppStore com.jondhale.thirdeye"
 
+  ThirdEyeLive:
+    type: app-extension
+    platform: iOS
+    supportedDestinations: [iOS]
+    sources:
+      - path: ThirdEyeLive
+      - path: Shared
+    info:
+      path: ThirdEyeLive/Info.plist
+      properties:
+        CFBundleDisplayName: Third Eye Live
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jondhale.thirdeye.live
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "match AppStore com.jondhale.thirdeye.live"
+
   ThirdEyeTests:
     type: bundle.unit-test
     platform: iOS
@@ -84,7 +118,36 @@ schemes:
     build:
       targets:
         ThirdEye: all
-        ThirdEyeTests: [test]
+        ThirdEyeLive:
+    type: app-extension
+    platform: iOS
+    supportedDestinations: [iOS]
+    sources:
+      - path: ThirdEyeLive
+      - path: Shared
+    info:
+      path: ThirdEyeLive/Info.plist
+      properties:
+        CFBundleDisplayName: Third Eye Live
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jondhale.thirdeye.live
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "match AppStore com.jondhale.thirdeye.live"
+
+  ThirdEyeTests: [test]
     test:
       targets:
         - ThirdEyeTests
