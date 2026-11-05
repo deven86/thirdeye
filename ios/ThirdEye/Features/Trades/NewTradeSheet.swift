@@ -64,7 +64,7 @@ struct NewTradeSheet: View {
     private var guardChecks: [RiskGuard.Check] {
         var out = [RiskGuard.weeklyCheck(store.trades, mode: mode, limitR: settings.weeklyLossLimitR, now: Date())]
         if let p = preview, let q = num(quantity), q > 0,
-           let open = RiskGuard.openRiskCheck(store.trades, mode: mode, currency: currency, newRisk: abs(p.entryMid - p.stopLoss) * q,
+           let open = RiskGuard.openRiskCheck(store.trades, mode: mode, currency: currency, newRisk: abs(p.entryMid - p.stopLoss) * q * instrument.contractSize,
                                               capital: num(capital), capPercent: settings.maxOpenRiskPercent) {
             out.append(open)
         }
