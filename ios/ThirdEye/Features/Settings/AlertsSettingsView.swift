@@ -30,6 +30,7 @@ struct AlertsSettingsView: View {
         .task {
             if address.isEmpty { address = monitor.address }
             await monitor.refreshNotificationPermission()
+            if monitor.notificationsAllowed == nil { await monitor.requestNotifications() }
             await monitor.refreshAll(trades: trades.trades, market: market)
         }
         .refreshable { await monitor.refreshAll(trades: trades.trades, market: market) }

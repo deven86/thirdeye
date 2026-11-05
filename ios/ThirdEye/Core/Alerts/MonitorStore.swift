@@ -319,7 +319,11 @@ final class MonitorStore {
 
     func refreshNotificationPermission() async {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
-        notificationsAllowed = settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral: notificationsAllowed = true
+        case .denied: notificationsAllowed = false
+        default: notificationsAllowed = nil   // never asked yet: show "Allow notifications", not "off"
+        }
         if notificationsAllowed == true { UIApplication.shared.registerForRemoteNotifications() }
     }
 
