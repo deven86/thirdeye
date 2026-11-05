@@ -53,6 +53,24 @@ nonisolated struct Instrument: Identifiable, Hashable, Codable, Sendable {
     var tickSize: Double?     // in price units (rupees for Indian instruments)
     var underlying: String?
 
+    /// Units in one "1" of quantity, the way brokers count it: forex is traded in lots of 100,000 of the base
+    /// currency (MetaTrader: 1.00 lot), gold in lots of 100 oz, silver 5,000 oz. Everything else counts units.
+    var contractSize: Double {
+        guard provider != .upstox else { return 1 }   // Indian F&O quantity is already in units (lot multiples)
+        switch kind {
+        case .forex: return 100_000
+        case .commodity:
+            let s = symbol.uppercased()
+            if s.hasPrefix("XAU") { return 100 }
+            if s.hasPrefix("XAG") { return 5_000 }
+            return 1
+        default: return 1
+        }
+    }
+
+    /// "lots" when quantity is counted in lots (forex, gold, silver), otherwise "units".
+    var quantityUnit: String { contractSize > 1 ? "lots" : "units" }
+
     /// Key used by the provider's candle API.
     var providerKey: String {
         switch provider {

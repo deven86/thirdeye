@@ -36,9 +36,10 @@ nonisolated enum PortfolioMath {
         let s = TradeMath.summary(t, lastPrice: price)
         guard s.openQuantity > 0, let avg = s.averageEntry else { return nil }
         let perUnitRisk = t.isLong ? avg - t.stopLoss : t.stopLoss - avg
+        let size = t.instrument.contractSize
         return Holding(trade: t, openQuantity: s.openQuantity, averageEntry: avg, price: price,
-                       cost: s.openQuantity * avg, value: price.map { s.openQuantity * $0 },
-                       unrealized: s.unrealized, openRisk: max(0, perUnitRisk) * s.openQuantity)
+                       cost: s.openQuantity * avg * size, value: price.map { s.openQuantity * $0 * size },
+                       unrealized: s.unrealized, openRisk: max(0, perUnitRisk) * s.openQuantity * size)
     }
 
     /// Realised P&L of each exit, dated — the basis for "this month" and the equity curve.
@@ -50,7 +51,7 @@ nonisolated enum PortfolioMath {
         let avg = entries.reduce(0) { $0 + $1.quantity * $1.price } / qty
         let dir: Double = t.isLong ? 1 : -1
         return t.fills.map { f in
-            f.kind == .exit ? (f.date, dir * (f.price - avg) * f.quantity - f.fees) : (f.date, -f.fees)
+            f.kind == .exit ? (f.date, dir * (f.price - avg) * f.quantity * t.instrument.contractSize - f.fees) : (f.date, -f.fees)
         }
     }
 

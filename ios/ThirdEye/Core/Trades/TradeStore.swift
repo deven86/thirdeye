@@ -81,6 +81,38 @@ final class TradeStore {
         save(t)
     }
 
+    /// Corrects a recorded fill (price, quantity, fees, date, which target).
+    func replaceFill(_ trade: Trade, with fill: Fill) {
+        var t = trade
+        guard let i = t.fills.firstIndex(where: { $0.id == fill.id }) else { return }
+        t.fills[i] = fill
+        Self.settleStatus(&t)
+        save(t)
+    }
+
+    func deleteFill(_ trade: Trade, id: UUID) {
+        var t = trade
+        t.fills.removeAll { $0.id == id }
+        Self.settleStatus(&t)
+        save(t)
+    }
+
+    /// After an edit: no entries → upcoming, nothing left open → closed, otherwise open.
+    nonisolated static func settleStatus(_ t: inout Trade) {
+        guard t.status != .cancelled else { return }
+        let s = TradeMath.summary(t, lastPrice: nil)
+        if s.entryQuantity <= 1e-12 {
+            t.status = .upcoming
+            t.closedAt = nil
+        } else if s.openQuantity <= 1e-12 {
+            t.status = .closed
+            t.closedAt = t.fills.filter { $0.kind == .exit }.map(\.date).max() ?? Date()
+        } else {
+            t.status = .open
+            t.closedAt = nil
+        }
+    }
+
     func cancel(_ trade: Trade) {
         var t = trade
         t.status = .cancelled

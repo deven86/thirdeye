@@ -82,10 +82,13 @@ nonisolated enum ActionPlanner {
         size.append("Risk \(String(format: "%.2g", riskPct))% of your capital on this trade (your normal \(String(format: "%.2g", inputs.riskPercent))% × \(factor == 1 ? "1 for grade A+" : factor == 0.75 ? "¾ for grade A" : "½ for grade \(run.grade ?? "B")")\(eventSoon || cautions ? ", halved again for the event/volatility warning" : "")).")
         if let capital = inputs.capital, capital > 0 {
             let riskAmount = capital * riskPct / 100
-            let qty = TradeMath.positionSize(capital: capital, riskPercent: riskPct, entry: entry, stop: plan.stopLoss, lotSize: i.lotSize)
+            let qty = TradeMath.positionSize(capital: capital, riskPercent: riskPct, entry: entry, stop: plan.stopLoss, lotSize: i.lotSize,
+                                                  contractSize: i.contractSize)
             if qty > 0 {
-                let value = qty * entry
-                size.append("Quantity \(qty.formatted(.number.precision(.fractionLength(0...6)))) — if the stop is hit you lose about \(amt(qty * risk)) (\(amt(riskAmount)) allowed).")
+                let cs = i.contractSize
+                let value = qty * entry * cs
+                let unit = cs > 1 ? " lot\(qty == 1 ? "" : "s") (1 lot = \(Int(cs).formatted()) units)" : ""
+                size.append("Quantity \(qty.formatted(.number.precision(.fractionLength(0...6))))\(unit) — if the stop is hit you lose about \(amt(qty * risk * cs)) (\(amt(riskAmount)) allowed).")
                 size.append("Position value \(amt(value)) = \(String(format: "%.0f", value / capital * 100))% of your \(amt(capital)) capital.")
                 if value > capital {
                     size.append("That is more than your capital: it needs margin/leverage. Without it, buy at most \(Int((capital / entry).rounded(.down))) — the risk is then smaller than planned, which is fine.")
@@ -141,8 +144,9 @@ nonisolated enum ActionPlanner {
         }
         against.append("If the trade watch says \"Weakened\" while you are at −0.5R or worse, cut half. \"Broken\" → exit.")
         if let capital = inputs.capital, capital > 0 {
-            let qty = TradeMath.positionSize(capital: capital, riskPercent: riskPct, entry: entry, stop: plan.stopLoss, lotSize: i.lotSize)
-            if qty > 0 { against.append("Stop hit → exit everything; the loss is about \(amt(qty * risk)), as planned. No revenge trade — wait for a fresh analysis.") }
+            let qty = TradeMath.positionSize(capital: capital, riskPercent: riskPct, entry: entry, stop: plan.stopLoss, lotSize: i.lotSize,
+                                                  contractSize: i.contractSize)
+            if qty > 0 { against.append("Stop hit → exit everything; the loss is about \(amt(qty * risk * i.contractSize)), as planned. No revenge trade — wait for a fresh analysis.") }
         } else {
             against.append("Stop hit → exit everything; the loss is the planned 1R. No revenge trade — wait for a fresh analysis.")
         }

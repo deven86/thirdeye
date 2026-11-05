@@ -79,10 +79,13 @@ nonisolated enum TradeMath {
     static func summary(_ t: Trade, lastPrice: Double?) -> Summary {
         let entries = t.fills.filter { $0.kind == .entry }
         let exits = t.fills.filter { $0.kind == .exit }
+        // Quantities are in lots for forex/gold (see Instrument.contractSize); money always uses units.
+        let size = t.instrument.contractSize
         let entryQty = entries.reduce(0) { $0 + $1.quantity }
         let exitQty = exits.reduce(0) { $0 + $1.quantity }
-        let invested = entries.reduce(0) { $0 + $1.quantity * $1.price }
-        let avgEntry = entryQty > 0 ? invested / entryQty : nil
+        let notional = entries.reduce(0) { $0 + $1.quantity * $1.price }
+        let invested = notional * size
+        let avgEntry = entryQty > 0 ? notional / entryQty : nil
         let avgExit = exitQty > 0 ? exits.reduce(0) { $0 + $1.quantity * $1.price } / exitQty : nil
         let fees = t.fills.reduce(0) { $0 + $1.fees }
         let dir: Double = t.isLong ? 1 : -1
@@ -90,24 +93,30 @@ nonisolated enum TradeMath {
 
         var realized = -fees
         if let avgEntry {
-            realized += exits.reduce(0) { $0 + dir * ($1.price - avgEntry) * $1.quantity }
+            realized += exits.reduce(0) { $0 + dir * ($1.price - avgEntry) * $1.quantity * size }
         }
         var unrealized: Double?
-        if let avgEntry, let lastPrice, openQty > 0 { unrealized = dir * (lastPrice - avgEntry) * openQty }
+        if let avgEntry, let lastPrice, openQty > 0 { unrealized = dir * (lastPrice - avgEntry) * openQty * size }
         if openQty == 0 { unrealized = 0 }
         let total = unrealized.map { realized + $0 }
         let riskPerUnit = avgEntry.map { abs($0 - t.initialStop) } ?? 0
-        let r = (total != nil && riskPerUnit > 0 && entryQty > 0) ? total! / (riskPerUnit * entryQty) : nil
+        let r = (total != nil && riskPerUnit > 0 && entryQty > 0) ? total! / (riskPerUnit * entryQty * size) : nil
         let pct = (total != nil && invested > 0) ? total! / invested * 100 : nil
         return Summary(entryQuantity: entryQty, exitQuantity: exitQty, openQuantity: openQty,
                        averageEntry: avgEntry, averageExit: avgExit, invested: invested, fees: fees,
                        realized: realized, unrealized: unrealized, total: total, returnPercent: pct, rMultiple: r)
     }
 
-    /// Units to buy so that hitting the stop loses `riskPercent` of `capital`; rounded down to the lot size.
-    static func positionSize(capital: Double, riskPercent: Double, entry: Double, stop: Double, lotSize: Double?) -> Double {
+    /// Quantity so that hitting the stop loses `riskPercent` of `capital`; rounded down to the lot size.
+    /// With a contract size (forex/gold) the result is in lots, rounded down to 0.01 lot like MetaTrader.
+    static func positionSize(capital: Double, riskPercent: Double, entry: Double, stop: Double, lotSize: Double?,
+                             contractSize: Double = 1) -> Double {
         let risk = abs(entry - stop)
         guard capital > 0, riskPercent > 0, risk > 0 else { return 0 }
+        if contractSize > 1 {
+            let lots = capital * riskPercent / 100 / (risk * contractSize)
+            return (lots * 100 + 1e-9).rounded(.down) / 100
+        }
         let raw = capital * riskPercent / 100 / risk
         let lot = max(lotSize ?? 0, 0)
         if lot >= 1 { return (raw / lot).rounded(.down) * lot }

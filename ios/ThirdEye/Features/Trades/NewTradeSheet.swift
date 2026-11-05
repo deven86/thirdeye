@@ -79,7 +79,8 @@ struct NewTradeSheet: View {
 
     private var suggestedQuantity: Double {
         guard let p = preview, let c = num(capital), let r = num(riskPercent) else { return 0 }
-        return TradeMath.positionSize(capital: c, riskPercent: r, entry: p.entryMid, stop: p.stopLoss, lotSize: instrument.lotSize)
+        return TradeMath.positionSize(capital: c, riskPercent: r, entry: p.entryMid, stop: p.stopLoss, lotSize: instrument.lotSize,
+                                       contractSize: instrument.contractSize)
     }
 
     var body: some View {
@@ -122,16 +123,16 @@ struct NewTradeSheet: View {
                 Section {
                     field("Capital for this market", $capital)
                     field("Risk per trade (%)", $riskPercent)
-                    LabeledContent("Suggested quantity", value: suggestedQuantity.formatted())
-                    field("Quantity you plan", $quantity)
+                    LabeledContent(instrument.contractSize > 1 ? "Suggested lots" : "Suggested quantity", value: suggestedQuantity.formatted())
+                    field(instrument.contractSize > 1 ? "Lots you plan" : "Quantity you plan", $quantity)
                     if let p = preview, let q = num(quantity), q > 0 {
-                        LabeledContent("Money at risk", value: fmt(abs(p.entryMid - p.stopLoss) * q))
-                        LabeledContent("Position value", value: fmt(p.entryMid * q))
+                        LabeledContent("Money at risk", value: fmt(abs(p.entryMid - p.stopLoss) * q * instrument.contractSize))
+                        LabeledContent("Position value", value: fmt(p.entryMid * q * instrument.contractSize))
                     }
                 } header: {
                     Text("Position size")
                 } footer: {
-                    Text("Suggested quantity loses \(riskPercent.isEmpty ? "—" : riskPercent)% of capital if the stop is hit\(instrument.lotSize.map { $0 > 1 ? ", rounded down to lots of \(Int($0))" : "" } ?? "").")
+                    Text("Suggested quantity loses \(riskPercent.isEmpty ? "—" : riskPercent)% of capital if the stop is hit\(instrument.lotSize.map { $0 > 1 ? ", rounded down to lots of \(Int($0))" : "" } ?? "").\(instrument.contractSize > 1 ? " Counted in lots like MetaTrader: 1 lot = \(Int(instrument.contractSize).formatted()) units, 0.01 = micro lot." : "")")
                 }
                 Section {
                     ForEach(guardChecks) { c in

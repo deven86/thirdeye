@@ -256,3 +256,37 @@ struct LiveActivityStateTests {
         #expect(LiveActivityManager.state(trade(open: false), price: 100).status == "inZone")
     }
 }
+
+@Suite("Forex lots")
+struct ForexLotTests {
+    private let nzd = Instrument(id: "twelve:NZD/USD", provider: .twelveData, symbol: "NZD/USD", name: "NZD/USD", exchange: "FX",
+                                 segment: "FOREX", kind: .forex, currency: "USD")
+
+    @Test func oneLotMatchesMetaTrader() {
+        // MetaTrader: NZDUSD sell 1 at 0.56396, now 0.56376 → +20.00 USD.
+        var t = Trade(instrument: nzd, mode: .paper, side: "short", status: .open, plannedEntryLow: 0.5635, plannedEntryHigh: 0.5652,
+                      stopLoss: 0.57, initialStop: 0.57, takeProfits: [], plannedQuantity: 1, badge: .swing, completeBy: Date())
+        t.fills.append(Fill(kind: .entry, date: Date(), price: 0.56396, quantity: 1))
+        let s = TradeMath.summary(t, lastPrice: 0.56376)
+        #expect(abs((s.unrealized ?? 0) - 20) < 1e-6)
+        #expect(abs(s.invested - 56_396) < 1e-6)
+        #expect(nzd.quantityUnit == "lots")
+    }
+
+    @Test func positionSizeInLots() {
+        // Risk 1 % of 100 000 = 1 000 USD; stop 60 pips away = 600 USD per lot → 1.66 lots (rounded down).
+        let lots = TradeMath.positionSize(capital: 100_000, riskPercent: 1, entry: 0.5640, stop: 0.5700, lotSize: nil, contractSize: 100_000)
+        #expect(lots == 1.66)
+    }
+
+    @Test func editingFillsSettlesTheStatus() {
+        var t = Trade(instrument: nzd, mode: .paper, side: "short", status: .open, plannedEntryLow: 0.5635, plannedEntryHigh: 0.5652,
+                      stopLoss: 0.57, initialStop: 0.57, takeProfits: [], plannedQuantity: 1, badge: .swing, completeBy: Date())
+        t.fills = []
+        TradeStore.settleStatus(&t)
+        #expect(t.status == .upcoming)
+        t.fills = [Fill(kind: .entry, date: Date(), price: 0.564, quantity: 1), Fill(kind: .exit, date: Date(), price: 0.56, quantity: 1)]
+        TradeStore.settleStatus(&t)
+        #expect(t.status == .closed && t.closedAt != nil)
+    }
+}

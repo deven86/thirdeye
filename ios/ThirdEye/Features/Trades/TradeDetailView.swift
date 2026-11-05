@@ -16,6 +16,8 @@ struct TradeDetailView: View {
     let prices: PriceBook
 
     @State private var sheet: FillSheet.Kind?
+    @State private var editingFill: Fill?
+    @State private var editPlan = false
     @State private var showMoveStop = false
     @State private var newStop = ""
     @State private var confirmCancel = false
@@ -92,7 +94,9 @@ struct TradeDetailView: View {
                         Text(tp.price.map(plainPrice) ?? "Trailing").monospacedDigit()
                     }
                 }
-                LabeledContent("Planned quantity", value: t.plannedQuantity.formatted())
+                LabeledContent(t.instrument.contractSize > 1 ? "Planned lots" : "Planned quantity",
+                               value: t.plannedQuantity.formatted() + (t.instrument.contractSize > 1 ? " (\((t.plannedQuantity * t.instrument.contractSize).formatted()) units)" : ""))
+                Button { editPlan = true } label: { Label("Edit plan", systemImage: "pencil") }
             }
 
             if t.status == .open {
@@ -105,8 +109,9 @@ struct TradeDetailView: View {
             }
 
             if !t.fills.isEmpty {
-                Section("Fills") {
+                Section {
                     ForEach(t.fills.sorted { $0.date < $1.date }) { f in
+                        Button { editingFill = f } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             HStack {
                                 Text(f.kind == .entry ? "Entry" : (f.takeProfitStage.map { "Exit · TP\($0)" } ?? "Exit"))
@@ -117,7 +122,16 @@ struct TradeDetailView: View {
                             Text(f.date.formatted(date: .abbreviated, time: .shortened) + (f.fees > 0 ? " · fees \(money(f.fees, cur))" : "") + (f.note.map { " · \($0)" } ?? ""))
                                 .font(.caption).foregroundStyle(palette.textSecondary)
                         }
+                        }
+                        .buttonStyle(.plain)
+                        .swipeActions {
+                            Button(role: .destructive) { store.deleteFill(t, id: f.id) } label: { Label("Delete", systemImage: "trash") }
+                        }
                     }
+                } header: {
+                    Text("Fills")
+                } footer: {
+                    Text("Tap a fill to correct it; swipe left to delete it.\(t.instrument.contractSize > 1 ? " Quantities are in lots (1 lot = \(Int(t.instrument.contractSize).formatted()) units), like MetaTrader." : "")")
                 }
             }
 
@@ -170,6 +184,8 @@ struct TradeDetailView: View {
         }
         .navigationTitle(t.instrument.symbol)
         .sheet(item: $sheet) { kind in FillSheet(kind: kind, trade: t, price: price) }
+        .sheet(item: $editingFill) { f in FillSheet(kind: f.kind == .entry ? .entry : .exit, trade: t, price: price, editing: f) }
+        .sheet(isPresented: $editPlan) { EditPlanSheet(trade: t) }
         .alert("Move stop-loss", isPresented: $showMoveStop) {
             TextField("New stop", text: $newStop).keyboardType(.decimalPad)
             Button("Save") {
@@ -329,6 +345,7 @@ struct FillSheet: View {
     let kind: Kind
     let trade: Trade
     let price: Double?
+    var editing: Fill? = nil
 
     @State private var priceText = ""
     @State private var quantityText = ""
@@ -338,14 +355,19 @@ struct FillSheet: View {
     @State private var note = ""
 
     private func num(_ s: String) -> Double? { Double(s.replacingOccurrences(of: ",", with: "")) }
-    private var openQty: Double { TradeMath.summary(trade, lastPrice: nil).openQuantity }
+    /// Open quantity, not counting the fill being corrected.
+    private var openQty: Double {
+        let base = TradeMath.summary(trade, lastPrice: nil).openQuantity
+        guard let editing else { return base }
+        return editing.kind == .exit ? base + editing.quantity : base - editing.quantity
+    }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     LabeledContent("Price") { TextField("0", text: $priceText).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
-                    LabeledContent("Quantity") { TextField("0", text: $quantityText).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
+                    LabeledContent(trade.instrument.contractSize > 1 ? "Lots" : "Quantity") { TextField("0", text: $quantityText).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
                     LabeledContent("Fees & taxes") { TextField("0", text: $feesText).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
                     DatePicker("When", selection: $date)
                 }
@@ -363,8 +385,13 @@ struct FillSheet: View {
                 if let q = num(quantityText), kind == .exit, q > openQty + 1e-9 {
                     Section { Text("You can't exit more than the open quantity.").foregroundStyle(palette.warning) }
                 }
+                if let editing {
+                    Section {
+                        Button("Delete this fill", role: .destructive) { store.deleteFill(trade, id: editing.id); dismiss() }
+                    }
+                }
             }
-            .navigationTitle(kind == .entry ? "Record entry" : "Record exit")
+            .navigationTitle(editing != nil ? "Correct fill" : kind == .entry ? "Record entry" : "Record exit")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -374,7 +401,8 @@ struct FillSheet: View {
             }
             .onAppear(perform: prefill)
             .onChange(of: tpStage) { _, stage in
-                guard let stage, let tp = trade.takeProfits.first(where: { $0.stage == stage }) else { return }
+                guard let stage, stage != editing?.takeProfitStage,
+                      let tp = trade.takeProfits.first(where: { $0.stage == stage }) else { return }
                 if let p = tp.price { priceText = p.formatted(.number.grouping(.never).precision(.fractionLength(0...6))) }
                 let q = trade.plannedQuantity * tp.bookPercent / 100
                 quantityText = min(q, openQty).formatted(.number.grouping(.never).precision(.fractionLength(0...6)))
@@ -384,11 +412,21 @@ struct FillSheet: View {
 
     private var valid: Bool {
         guard let p = num(priceText), p > 0, let q = num(quantityText), q > 0 else { return false }
+        if kind == .entry, editing != nil { return openQty + q >= -1e-9 }   // can't shrink an entry below what was exited
         return kind == .entry || q <= openQty + 1e-9
     }
 
     private func prefill() {
         let plain = { (v: Double) in v.formatted(.number.grouping(.never).precision(.fractionLength(0...6))) }
+        if let editing {
+            priceText = plain(editing.price)
+            quantityText = plain(editing.quantity)
+            feesText = editing.fees > 0 ? plain(editing.fees) : ""
+            date = editing.date
+            tpStage = editing.takeProfitStage
+            note = editing.note ?? ""
+            return
+        }
         if let price { priceText = plain(price) } else if kind == .entry { priceText = plain(trade.plannedEntryMid) }
         quantityText = plain(kind == .entry ? max(trade.plannedQuantity - TradeMath.summary(trade, lastPrice: nil).entryQuantity, 0) : openQty)
     }
@@ -396,6 +434,14 @@ struct FillSheet: View {
     private func save() {
         guard let p = num(priceText), let q = num(quantityText) else { return }
         let fees = num(feesText) ?? 0
+        if var f = editing {
+            f.price = p; f.quantity = q; f.fees = fees; f.date = date
+            f.takeProfitStage = kind == .exit ? tpStage : nil
+            f.note = kind == .exit && !note.isEmpty ? note : f.note
+            store.replaceFill(trade, with: f)
+            dismiss()
+            return
+        }
         if kind == .entry {
             store.recordEntry(trade, price: p, quantity: q, fees: fees, date: date)
             // First entry: put the trade on the Lock Screen (the user can remove it on the trade screen).
@@ -405,6 +451,113 @@ struct FillSheet: View {
         } else {
             store.recordExit(trade, price: p, quantity: q, fees: fees, date: date, takeProfitStage: tpStage, note: note.isEmpty ? nil : note)
         }
+        dismiss()
+    }
+}
+
+/// Correct the plan after saving: entry zone, stop, targets, planned size, deadline, notes.
+struct EditPlanSheet: View {
+    @Environment(TradeStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
+    let trade: Trade
+
+    @State private var entryLow = ""
+    @State private var entryHigh = ""
+    @State private var stop = ""
+    @State private var initialStop = ""
+    @State private var targets: [String] = []
+    @State private var quantity = ""
+    @State private var completeBy = Date()
+    @State private var notes = ""
+
+    private func num(_ s: String) -> Double? { Double(s.replacingOccurrences(of: ",", with: "")) }
+    private func plain(_ v: Double) -> String { v.formatted(.number.grouping(.never).precision(.fractionLength(0...6))) }
+
+    private var problems: [String] {
+        var out: [String] = []
+        guard let lo = num(entryLow), let hi = num(entryHigh), let st = num(stop), let ist = num(initialStop),
+              let q = num(quantity) else { return ["Fill in every number."] }
+        if lo > hi { out.append("Entry low is above entry high.") }
+        if trade.isLong ? st >= lo && !hasEntries : st <= hi && !hasEntries { out.append("The stop must be \(trade.isLong ? "below" : "above") the entry zone.") }
+        if trade.isLong ? ist >= lo : ist <= hi { out.append("The first stop must be \(trade.isLong ? "below" : "above") the entry zone (it defines 1R).") }
+        if q <= 0 { out.append("Planned quantity must be above 0.") }
+        for (i, t) in targets.enumerated() where !t.isEmpty {
+            guard let v = num(t) else { out.append("TP\(i + 1) is not a number."); continue }
+            if trade.isLong ? v <= hi : v >= lo { out.append("TP\(i + 1) is on the wrong side of the entry zone.") }
+        }
+        return out
+    }
+
+    private var hasEntries: Bool { trade.fills.contains { $0.kind == .entry } }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Entry zone") {
+                    row("Low", $entryLow)
+                    row("High", $entryHigh)
+                }
+                Section {
+                    row("Stop-loss now", $stop)
+                    row("First stop (defines 1R)", $initialStop)
+                } header: {
+                    Text("Stop")
+                } footer: {
+                    Text("Moving the stop further away raises your risk — only do it to correct a typo.")
+                }
+                Section("Take-profits") {
+                    ForEach(Array(trade.takeProfits.enumerated()), id: \.offset) { i, tp in
+                        if tp.price != nil, i < targets.count {
+                            row("TP\(tp.stage) · book \(Int(tp.bookPercent))%", $targets[i])
+                        }
+                    }
+                }
+                Section {
+                    row(trade.instrument.contractSize > 1 ? "Planned lots" : "Planned quantity", $quantity)
+                    DatePicker("Complete by", selection: $completeBy, displayedComponents: .date)
+                    TextField("Notes", text: $notes, axis: .vertical)
+                }
+                if !problems.isEmpty {
+                    Section { ForEach(problems, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(palette.warning) } }
+                }
+            }
+            .navigationTitle("Edit plan")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.disabled(!problems.isEmpty) }
+            }
+            .onAppear {
+                entryLow = plain(trade.plannedEntryLow)
+                entryHigh = plain(trade.plannedEntryHigh)
+                stop = plain(trade.stopLoss)
+                initialStop = plain(trade.initialStop)
+                targets = trade.takeProfits.map { $0.price.map(plain) ?? "" }
+                quantity = plain(trade.plannedQuantity)
+                completeBy = trade.completeBy
+                notes = trade.notes
+            }
+        }
+    }
+
+    private func row(_ title: String, _ text: Binding<String>) -> some View {
+        LabeledContent(title) { TextField("0", text: text).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
+    }
+
+    private func save() {
+        guard problems.isEmpty, var t = store.trade(id: trade.id) else { return }
+        t.plannedEntryLow = num(entryLow) ?? t.plannedEntryLow
+        t.plannedEntryHigh = num(entryHigh) ?? t.plannedEntryHigh
+        t.stopLoss = num(stop) ?? t.stopLoss
+        t.initialStop = num(initialStop) ?? t.initialStop
+        for i in t.takeProfits.indices where i < targets.count && t.takeProfits[i].price != nil {
+            if let v = num(targets[i]) { t.takeProfits[i].price = v }
+        }
+        t.plannedQuantity = num(quantity) ?? t.plannedQuantity
+        t.completeBy = completeBy
+        t.notes = notes
+        store.save(t)
         dismiss()
     }
 }
