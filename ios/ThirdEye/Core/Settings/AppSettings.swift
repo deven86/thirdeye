@@ -23,6 +23,7 @@ final class AppSettings {
         static let skippedStages = "settings.skippedStagesByProfile"
         static let autoAIReview = "settings.autoAIReview"
         static let watchNotifications = "settings.watchNotifications"
+        static let autoImportUpstox = "settings.autoImportUpstox"
     }
 
     private let defaults: UserDefaults
@@ -109,6 +110,11 @@ final class AppSettings {
         didSet { defaults.set(autoAIReview, forKey: Keys.autoAIReview) }
     }
 
+    /// Upstox: add fills that match a Third Eye trade automatically.
+    var autoImportUpstox: Bool {
+        didSet { defaults.set(autoImportUpstox, forKey: Keys.autoImportUpstox) }
+    }
+
     /// Trade watch: notify on this iPhone when a trade's parameters change.
     var watchNotifications: Bool {
         didSet { defaults.set(watchNotifications, forKey: Keys.watchNotifications) }
@@ -137,6 +143,7 @@ final class AppSettings {
         skippedStagesByProfile = defaults.dictionary(forKey: Keys.skippedStages) as? [String: [Int]] ?? [:]
         autoAIReview = defaults.object(forKey: Keys.autoAIReview) as? Bool ?? true
         watchNotifications = defaults.object(forKey: Keys.watchNotifications) as? Bool ?? true
+        autoImportUpstox = defaults.object(forKey: Keys.autoImportUpstox) as? Bool ?? true
         if let data = defaults.data(forKey: Keys.tierAssignments),
            let decoded = try? JSONDecoder().decode([String: ModelRef].self, from: data) {
             var map: [ModelTier: ModelRef] = [:]

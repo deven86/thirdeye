@@ -3,6 +3,7 @@ import SwiftUI
 struct TradesView: View {
     @Environment(TradeStore.self) private var store
     @Environment(MarketStore.self) private var market
+    @Environment(UpstoxSync.self) private var upstoxSync
     @Environment(\.palette) private var palette
     @Environment(\.scenePhase) private var scenePhase
     @State private var prices = PriceBook()
@@ -40,6 +41,13 @@ struct TradesView: View {
         }
         .navigationTitle("Trades")
         .toolbar {
+            if market.hasUpstoxKeys {
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink { UpstoxSyncView() } label: {
+                        Label("Upstox", systemImage: upstoxSync.attentionCount > 0 ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.triangle.2.circlepath")
+                    }
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button { pickInstrument = true } label: { Label("Add trade", systemImage: "plus") }
             }

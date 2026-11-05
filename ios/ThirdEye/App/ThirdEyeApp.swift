@@ -14,6 +14,7 @@ struct ThirdEyeApp: App {
     @State private var outcomes = OutcomeStore()
     @State private var guardian = TradeGuardian()
     @State private var live = LiveActivityManager.shared
+    @State private var upstoxSync = UpstoxSync()
 
     var body: some Scene {
         WindowGroup {
@@ -31,6 +32,7 @@ struct ThirdEyeApp: App {
             .environment(outcomes)
             .environment(guardian)
             .environment(live)
+            .environment(upstoxSync)
         }
     }
 }
@@ -47,6 +49,7 @@ struct RootView: View {
     @Environment(AnalysisStore.self) private var analyses
     @Environment(TradeGuardian.self) private var guardian
     @Environment(LiveActivityManager.self) private var live
+    @Environment(UpstoxSync.self) private var upstoxSync
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -98,6 +101,7 @@ struct RootView: View {
         .task(id: scenePhase == .active && lock.isUnlocked) {
             guard scenePhase == .active, lock.isUnlocked else { return }
             while !Task.isCancelled {
+                await upstoxSync.sync(trades: trades, market: market, settings: settings, auto: true)
                 await guardian.checkDue(trades: trades, market: market, analyses: analyses, settings: settings)
                 await monitor.refreshStatus()
                 WidgetPublisher.publish(trades: trades.trades, monitor: monitor)

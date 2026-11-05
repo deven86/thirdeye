@@ -23,6 +23,8 @@ nonisolated struct Fill: Codable, Hashable, Sendable, Identifiable {
     /// Which take-profit this exit was (1…5), or nil for stop/manual.
     var takeProfitStage: Int?
     var note: String?
+    /// Set when the fill came from the broker (e.g. "upstox:<trade id>"), so it is never imported twice.
+    var brokerID: String?
 }
 
 /// One trade from idea to close. Synced between devices; `updatedAt` decides conflicts.

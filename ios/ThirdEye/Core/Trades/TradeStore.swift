@@ -81,6 +81,23 @@ final class TradeStore {
         save(t)
     }
 
+    /// Adds fills matched from the broker. Recording TP1 still moves the stop to breakeven.
+    func applyBrokerMatches(_ matches: [UpstoxReconciler.Match]) -> Int {
+        var added = 0
+        for m in matches {
+            guard var t = trade(id: m.tradeID), !t.fills.contains(where: { $0.brokerID == m.fill.id }) else { continue }
+            t.fills.append(Fill(kind: m.isEntry ? .entry : .exit, date: m.fill.date, price: m.fill.price, quantity: m.fill.quantity,
+                                takeProfitStage: m.takeProfitStage, note: m.isEntry ? nil : "From Upstox", brokerID: m.fill.id))
+            if !m.isEntry, m.takeProfitStage == 1, let avg = TradeMath.summary(t, lastPrice: nil).averageEntry {
+                t.stopLoss = t.isLong ? max(t.stopLoss, avg) : min(t.stopLoss, avg)
+            }
+            Self.settleStatus(&t)
+            save(t)
+            added += 1
+        }
+        return added
+    }
+
     /// Corrects a recorded fill (price, quantity, fees, date, which target).
     func replaceFill(_ trade: Trade, with fill: Fill) {
         var t = trade
