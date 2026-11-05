@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -138,6 +139,18 @@ func Evaluate(t WatchTrade, price float64, now time.Time, m *Memory, s Settings,
 				}
 			}
 		}
+		for _, lv := range t.Levels {
+			if lv.Price <= 0 || lv.Key == "" {
+				continue
+			}
+			key := "lvl:" + lv.Key + ":" + ftoa(lv.Price)
+			crossed := (lv.Above && price >= lv.Price) || (!lv.Above && price <= lv.Price)
+			if crossed {
+				fire(key, "level", lv.Title, strings.TrimSpace(lv.Body)+fmt.Sprintf(" Price %s.", p(price)), lv.Urgent)
+			} else if risk > 0 && math.Abs(price-lv.Price) >= 0.5*risk {
+				delete(m.Fired, key) // clearly back on the other side: alert again on the next cross
+			}
+		}
 		if !t.CompleteBy.IsZero() && now.After(t.CompleteBy) {
 			fire("time", "time", t.Symbol+" · time limit reached",
 				fmt.Sprintf("The plan's complete-by date (%s) has passed. Close the trade or re-analyse.",
@@ -182,7 +195,7 @@ func Evaluate(t WatchTrade, price float64, now time.Time, m *Memory, s Settings,
 	}
 	m.Samples = append(kept, Sample{At: now, Price: price})
 	for k, at := range m.Fired {
-		if strings.HasPrefix(k, "gap:") && now.Sub(at) > 30*24*time.Hour {
+		if (strings.HasPrefix(k, "gap:") || strings.HasPrefix(k, "lvl:")) && now.Sub(at) > 30*24*time.Hour {
 			delete(m.Fired, k)
 		}
 	}

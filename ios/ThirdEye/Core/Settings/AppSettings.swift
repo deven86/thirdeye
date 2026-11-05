@@ -20,6 +20,9 @@ final class AppSettings {
         static let stageReuseHours = "settings.stageReuseHours"
         static let weeklyLossLimitR = "settings.weeklyLossLimitR"
         static let maxOpenRiskPercent = "settings.maxOpenRiskPercent"
+        static let skippedStages = "settings.skippedStagesByProfile"
+        static let autoAIReview = "settings.autoAIReview"
+        static let watchNotifications = "settings.watchNotifications"
     }
 
     private let defaults: UserDefaults
@@ -88,6 +91,29 @@ final class AppSettings {
         didSet { saveAssignments() }
     }
 
+    /// Stages the user turned off, per holding profile (stage 10 can't be skipped).
+    var skippedStagesByProfile: [String: [Int]] {
+        didSet { defaults.set(skippedStagesByProfile, forKey: Keys.skippedStages) }
+    }
+
+    func skippedStages(for profile: HoldingProfile) -> Set<Int> {
+        Set(skippedStagesByProfile[profile.rawValue] ?? []).intersection(1...9)
+    }
+
+    func setSkipped(_ skip: Set<Int>, for profile: HoldingProfile) {
+        skippedStagesByProfile[profile.rawValue] = skip.intersection(1...9).sorted()
+    }
+
+    /// Trade watch: ask the AI to re-check an open trade automatically when its parameters change.
+    var autoAIReview: Bool {
+        didSet { defaults.set(autoAIReview, forKey: Keys.autoAIReview) }
+    }
+
+    /// Trade watch: notify on this iPhone when a trade's parameters change.
+    var watchNotifications: Bool {
+        didSet { defaults.set(watchNotifications, forKey: Keys.watchNotifications) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         theme = AppTheme(rawValue: defaults.string(forKey: Keys.theme) ?? "") ?? .liquidGlass
@@ -108,6 +134,9 @@ final class AppSettings {
         weeklyLossLimitR = lossLimit > 0 ? lossLimit : 3
         let openCap = defaults.double(forKey: Keys.maxOpenRiskPercent)
         maxOpenRiskPercent = openCap > 0 ? openCap : 6
+        skippedStagesByProfile = defaults.dictionary(forKey: Keys.skippedStages) as? [String: [Int]] ?? [:]
+        autoAIReview = defaults.object(forKey: Keys.autoAIReview) as? Bool ?? true
+        watchNotifications = defaults.object(forKey: Keys.watchNotifications) as? Bool ?? true
         if let data = defaults.data(forKey: Keys.tierAssignments),
            let decoded = try? JSONDecoder().decode([String: ModelRef].self, from: data) {
             var map: [ModelTier: ModelRef] = [:]

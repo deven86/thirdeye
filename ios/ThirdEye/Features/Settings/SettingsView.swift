@@ -61,6 +61,19 @@ struct SettingsView: View {
             }
 
             Section {
+                Toggle(isOn: $settings.watchNotifications) {
+                    Label("Notify when a trade changes", systemImage: "eye")
+                }
+                Toggle(isOn: $settings.autoAIReview) {
+                    Label("AI re-checks automatically", systemImage: "sparkles")
+                }
+            } header: {
+                Text("Trade watch")
+            } footer: {
+                Text("While Third Eye is open, each open trade's reasons (trend, swings, momentum, volatility, key level) are re-checked against the chart. When something important changes, the AI re-reads the trade (Balanced model, about $0.01–0.05) and you get a notification.")
+            }
+
+            Section {
                 Picker(selection: $settings.hotMarket) {
                     ForEach(HotMarket.allCases) { Text($0.title).tag($0) }
                 } label: { Label("Hot trades market", systemImage: "flame") }

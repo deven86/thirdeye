@@ -370,7 +370,8 @@ final class HotTradesEngine {
         for i in scan.picks.indices {
             if Task.isCancelled { return }
             phase = .analysing(index: i + 1, total: scan.picks.count, symbol: scan.picks[i].instrument.symbol)
-            if let run = await analysis.runAndWait(instrument: scan.picks[i].instrument, profile: profile, context: context) {
+            if let run = await analysis.runAndWait(instrument: scan.picks[i].instrument, profile: profile,
+                                                    skip: context.settings.skippedStages(for: profile), context: context) {
                 scan.picks[i].runID = run.id
                 scan.picks[i].composite = run.composite
                 scan.picks[i].verdict = run.verdict

@@ -12,6 +12,7 @@ struct ThirdEyeApp: App {
     @State private var trades = TradeStore()
     @State private var hotScans = HotScanStore()
     @State private var outcomes = OutcomeStore()
+    @State private var guardian = TradeGuardian()
 
     var body: some Scene {
         WindowGroup {
@@ -27,6 +28,7 @@ struct ThirdEyeApp: App {
             .environment(hotScans)
             .environment(monitor)
             .environment(outcomes)
+            .environment(guardian)
         }
     }
 }
@@ -41,6 +43,7 @@ struct RootView: View {
     @Environment(MonitorStore.self) private var monitor
     @Environment(OutcomeStore.self) private var outcomes
     @Environment(AnalysisStore.self) private var analyses
+    @Environment(TradeGuardian.self) private var guardian
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -72,6 +75,14 @@ struct RootView: View {
         .onChange(of: market.upstoxTokenExpiry) { _, _ in Task { await monitor.syncCredentials(market: market) } }
         .onChange(of: market.hasTwelveDataKey) { _, _ in Task { await monitor.syncCredentials(market: market) } }
         .task { await monitor.refreshAll(trades: trades.trades, market: market) }
+        // Trade watch: re-check open trades' parameters while the app is open (each at its own interval).
+        .task(id: scenePhase == .active && lock.isUnlocked) {
+            guard scenePhase == .active, lock.isUnlocked else { return }
+            while !Task.isCancelled {
+                await guardian.checkDue(trades: trades, market: market, analyses: analyses, settings: settings)
+                try? await Task.sleep(for: .seconds(300))
+            }
+        }
     }
 }
 

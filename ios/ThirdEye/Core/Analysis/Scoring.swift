@@ -74,16 +74,29 @@ nonisolated enum Scoring {
 
     nonisolated struct Consensus: Hashable, Sendable {
         var completed: Int
-        /// Σ(w × c) of completed stages ÷ Σ w of all stages: how much of the analysis rests on confident evidence.
+        /// Σ(w × c) of completed stages ÷ Σ w of the stages that were run (skipped ones excluded):
+        /// how much of the analysis rests on confident evidence.
         var evidence: Double
         /// Weight share of completed stages pointing the trade's way (score ≥ 55 for long, ≤ 45 for short).
         var support: Double
         var opposition: Double
+        /// Stages the user turned off, and the share of the profile's weight they carried.
+        var skipped: Int = 0
+        var skippedWeightShare: Double = 0
+        var active: Int { 10 - skipped }
+    }
+
+    /// Completed stages needed for a trade: 7 of 10, or 70 % of the stages left after skipping (at least 3).
+    static func requiredStages(active: Int) -> Int {
+        max(3, Int((Double(active) * Double(minimumStages) / 10).rounded(.up)))
     }
 
     static func consensus(_ stages: [StageResult], profile: HoldingProfile, side: String) -> Consensus {
         let done = stages.filter { $0.status == .done && weight($0, profile) > 0 }
-        let totalWeight = profile.weights.reduce(0, +)
+        let skippedIDs = Set(stages.filter { $0.status == .skipped }.map(\.stage))
+        let allWeight = profile.weights.reduce(0, +)
+        let skippedWeight = skippedIDs.reduce(0.0) { $0 + (($1 >= 1 && $1 <= 10) ? profile.weights[$1 - 1] : 0) }
+        let totalWeight = allWeight - skippedWeight
         let doneWeight = done.reduce(0) { $0 + weight($1, profile) }
         let evidence = totalWeight > 0 ? done.reduce(0) { $0 + weight($1, profile) * $1.confidence } / totalWeight : 0
         func share(_ test: (Int) -> Bool) -> Double {
@@ -92,7 +105,9 @@ nonisolated enum Scoring {
         let long = side != "short"
         return Consensus(completed: stages.filter { $0.status == .done }.count, evidence: evidence,
                          support: share { long ? $0 >= 55 : $0 <= 45 },
-                         opposition: share { long ? $0 <= 45 : $0 >= 55 })
+                         opposition: share { long ? $0 <= 45 : $0 >= 55 },
+                         skipped: skippedIDs.count,
+                         skippedWeightShare: allWeight > 0 ? skippedWeight / allWeight : 0)
     }
 
     nonisolated struct Evaluation: Sendable {
@@ -131,8 +146,18 @@ nonisolated enum Scoring {
         checks.append(ScoreCheck(id: "score", title: "Score",
                                  detail: band == .noTrade ? "\(c) is in the No-trade band (381–619)" : "\(c) is in the \(band.title) band",
                                  passed: band != .noTrade))
+        let required = requiredStages(active: cons.active)
         checks.append(ScoreCheck(id: "stages", title: "Stages completed",
-                                 detail: "\(cons.completed) of 10 (needs \(minimumStages))", passed: cons.completed >= minimumStages))
+                                 detail: cons.skipped > 0
+                                    ? "\(cons.completed) of the \(cons.active) you kept (needs \(required); \(cons.skipped) skipped)"
+                                    : "\(cons.completed) of 10 (needs \(required))",
+                                 passed: cons.completed >= required))
+        if cons.skipped > 0 {
+            let names = stages.filter { $0.status == .skipped }.sorted { $0.stage < $1.stage }.map { "\($0.stage)" }.joined(separator: ", ")
+            checks.append(ScoreCheck(id: "skipped", title: "Stages skipped",
+                                     detail: "you skipped stage\(cons.skipped == 1 ? "" : "s") \(names) — \(percent(cons.skippedWeightShare)) of this profile's weight was shared among the others\(cons.skippedWeightShare > 0.3 ? ", so the grade is capped at B" : cons.skippedWeightShare > 0.15 ? ", so the grade is capped at A" : "")",
+                                     passed: cons.skippedWeightShare <= 0.15, blocking: false))
+        }
         checks.append(ScoreCheck(id: "evidence", title: "Evidence strength",
                                  detail: "\(percent(cons.evidence)) (needs \(percent(minimumEvidence)))",
                                  passed: cons.evidence >= minimumEvidence))
@@ -167,8 +192,11 @@ nonisolated enum Scoring {
                                          detail: "the event stage did not answer this — check results dates yourself", passed: false, blocking: false))
             }
         } else {
+            let skipped = stages.contains { $0.stage == 2 && $0.status == .skipped }
             checks.append(ScoreCheck(id: "event", title: "No product event soon",
-                                     detail: "event calendar stage unavailable — check results dates yourself", passed: false, blocking: false))
+                                     detail: skipped ? "you skipped the events stage — check results and dividend dates yourself"
+                                                     : "event calendar stage unavailable — check results dates yourself",
+                                     passed: false, blocking: false))
         }
         if let plan {
             if plan.side != side || balanced {
@@ -202,12 +230,15 @@ nonisolated enum Scoring {
     }
 
     /// A+ needs the Strong band, strong evidence and near-unanimous agreement; A most of that; B = passes the checks.
+    /// Skipping stages caps the grade: over 15 % of the weight skipped → at most A, over 30 % → B.
     static func grade(composite: Int, consensus: Consensus) -> String {
         let distance = abs(composite - 500)   // bands are symmetric around 500: 620/380 and 750/250
         var points = distance >= 250 ? 2 : distance >= 170 ? 1 : 0
         points += consensus.evidence >= 0.65 ? 2 : consensus.evidence >= 0.5 ? 1 : 0
         points += consensus.support >= 0.85 && consensus.opposition <= 0.05 ? 2
             : consensus.support >= 0.65 && consensus.opposition <= 0.2 ? 1 : 0
+        if consensus.skippedWeightShare > 0.3 { points = min(points, 3) }
+        else if consensus.skippedWeightShare > 0.15 { points = min(points, 5) }
         return points >= 6 ? "A+" : points >= 4 ? "A" : "B"
     }
 

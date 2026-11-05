@@ -11,6 +11,7 @@ struct AnalyseSheet: View {
 
     @State private var profile: HoldingProfile = .swing
     @State private var engine = AnalysisEngine()
+    @State private var skip: Set<Int> = []
 
     var body: some View {
         NavigationStack {
@@ -35,11 +36,14 @@ struct AnalyseSheet: View {
             }
         }
         .interactiveDismissDisabled(engine.isRunning)
+        .onAppear { skip = settings.skippedStages(for: profile) }
+        .onChange(of: profile) { _, p in skip = settings.skippedStages(for: p) }
     }
 
     private var setup: some View {
         let blockers = AnalysisEngine.blockers(settings: settings)
-        let estimate = AnalysisEngine.estimate(settings: settings)
+        let estimate = AnalysisEngine.estimate(settings: settings, skip: skip)
+        let activeWeight = profile.weights.enumerated().filter { !skip.contains($0.offset + 1) }.reduce(0.0) { $0 + $1.element }
         return Form {
             if !blockers.isEmpty {
                 Section {
@@ -68,16 +72,46 @@ struct AnalyseSheet: View {
                 Text("This sets how much each of the 10 stages counts. Short holds weight today's chart; long holds weight history, leadership and the sector.")
             }
 
-            Section("What happens") {
+            Section {
                 ForEach(StageSpec.all) { s in
-                    HStack {
+                    let on = !skip.contains(s.id)
+                    let w = profile.weights[s.id - 1]
+                    HStack(spacing: 10) {
                         Text("\(s.id)").font(.caption.monospacedDigit()).foregroundStyle(palette.textSecondary).frame(width: 20)
-                        Text(s.name)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(s.name).foregroundStyle(on ? palette.textPrimary : palette.textSecondary)
+                            HStack(spacing: 6) {
+                                Text(on ? (activeWeight > 0 ? "counts \(Int((w / activeWeight * 100).rounded()))%" : "—") : "skipped")
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(on ? palette.textSecondary : palette.warning)
+                                Text(s.tier.title).font(.caption).foregroundStyle(palette.accent)
+                                if s.webSearch { Image(systemName: "globe").font(.caption).foregroundStyle(palette.textSecondary) }
+                            }
+                        }
                         Spacer()
-                        Text(s.tier.title).font(.caption).foregroundStyle(palette.accent)
-                        if s.webSearch { Image(systemName: "globe").font(.caption).foregroundStyle(palette.textSecondary) }
+                        if s.id == 10 {
+                            Text("always").font(.caption).foregroundStyle(palette.textSecondary)
+                        } else {
+                            Toggle("", isOn: Binding(
+                                get: { !skip.contains(s.id) },
+                                set: { keep in
+                                    if keep { skip.remove(s.id) } else if skip.count < 6 { skip.insert(s.id) }
+                                    settings.setSkipped(skip, for: profile)
+                                }))
+                            .labelsHidden()
+                        }
                     }
                 }
+                if !skip.isEmpty {
+                    Button("Run all 10 stages") { skip = []; settings.setSkipped([], for: profile) }
+                        .font(.callout)
+                }
+            } header: {
+                Text("Stages")
+            } footer: {
+                Text(skip.isEmpty
+                     ? "Turn off stages you don't need (for example leadership for crypto). Their weight is shared by the stages you keep. Stage 10 always runs — it writes the plan. At most 6 can be skipped."
+                     : "\(skip.count) skipped: their share of the score goes to the stages you keep (the % above). Fewer views = less reliable — skipping more than 15% of the weight caps the grade. Remembered for the \(profile.title) profile.")
             }
 
             Section {
@@ -90,10 +124,10 @@ struct AnalyseSheet: View {
 
             Section {
                 Button {
-                    engine.start(instrument: instrument, profile: profile,
+                    engine.start(instrument: instrument, profile: profile, skip: skip,
                                  context: .init(market: market, settings: settings, store: store))
                 } label: {
-                    Label("Run 10-stage analysis", systemImage: "sparkles")
+                    Label(skip.isEmpty ? "Run 10-stage analysis" : "Run \(10 - skip.count)-stage analysis", systemImage: "sparkles")
                         .frame(maxWidth: .infinity)
                         .font(.body.weight(.semibold))
                 }
@@ -134,6 +168,8 @@ struct AnalysisProgressView: View {
                             Text("\(spec.id). \(spec.name)")
                             if let result, result.status == .done {
                                 Text(result.summary).font(.caption).foregroundStyle(palette.textSecondary).lineLimit(2)
+                            } else if status == .skipped {
+                                Text("Skipped by you").font(.caption).foregroundStyle(palette.textSecondary)
                             } else if let result, result.status == .unavailable {
                                 Text(result.summary).font(.caption).foregroundStyle(palette.warning).lineLimit(2)
                             }
@@ -155,7 +191,7 @@ struct AnalysisProgressView: View {
         switch engine.phase {
         case .idle: "Ready"
         case .fetchingData: "Fetching charts and computing technicals…"
-        case .runningStages: "Running stages 1–9…"
+        case .runningStages: "Running the stages…"
         case .finalStage: "Stage 10: final verdict and plan…"
         case .verifying: "Checking the plan…"
         case .done: "Done"
@@ -170,6 +206,7 @@ struct AnalysisProgressView: View {
         case .running: ProgressView().controlSize(.small)
         case .done: Image(systemName: "checkmark.circle.fill").foregroundStyle(palette.up)
         case .unavailable: Image(systemName: "exclamationmark.circle.fill").foregroundStyle(palette.warning)
+        case .skipped: Image(systemName: "minus.circle").foregroundStyle(palette.neutral)
         }
     }
 }

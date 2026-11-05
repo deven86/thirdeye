@@ -25,6 +25,7 @@ type WatchTrade struct {
 	AvgEntry       *float64  `json:"avgEntry,omitempty"`
 	OpenQuantity   float64   `json:"openQuantity"`
 	Targets        []Target  `json:"targets"`
+	Levels         []Level   `json:"levels,omitempty"` // key chart levels from the analysis (trade watch)
 	CompleteBy     time.Time `json:"completeBy"`
 	CadenceSeconds int       `json:"cadenceSeconds"`
 	UpdatedAt      time.Time `json:"updatedAt"`
@@ -38,6 +39,16 @@ type Target struct {
 	BookPercent float64  `json:"bookPercent"`
 	Then        string   `json:"then"`
 	Booked      bool     `json:"booked"` // the user already recorded this exit
+}
+
+// Level is a chart level the trade's reasons rest on. Crossing it fires one alert.
+type Level struct {
+	Key    string  `json:"key"`
+	Price  float64 `json:"price"`
+	Above  bool    `json:"above"` // fire when the price is at or above Price (otherwise at or below)
+	Title  string  `json:"title"`
+	Body   string  `json:"body"`
+	Urgent bool    `json:"urgent"`
 }
 
 func (t WatchTrade) Long() bool { return t.Side != "short" }

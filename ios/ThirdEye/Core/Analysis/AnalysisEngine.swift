@@ -48,9 +48,9 @@ final class AnalysisEngine {
     }
 
     /// Rough per-run estimate from the stage token budgets and current tier models.
-    static func estimate(settings: AppSettings) -> Double {
+    static func estimate(settings: AppSettings, skip: Set<Int> = []) -> Double {
         var total = 0.0
-        for s in StageSpec.all {
+        for s in StageSpec.all where !skip.contains(s.id) || s.id == 10 {
             guard let model = settings.tierAssignments[s.tier]?.modelID else { continue }
             let input = s.packs.isEmpty ? 3_000 : 2_500 + 2_000 * s.packs.count
             let searchTokens = s.webSearch ? 12_000 * s.maxSearches : 0
@@ -63,25 +63,32 @@ final class AnalysisEngine {
         return total
     }
 
-    func start(instrument: Instrument, profile: HoldingProfile, context: Context) {
+    /// Stages that can be turned off (stage 10 writes the plan, so it always runs).
+    nonisolated static let skippableStageIDs: [Int] = Array(1...9)
+
+    nonisolated static func cleanSkip(_ skip: Set<Int>) -> Set<Int> { skip.intersection(skippableStageIDs) }
+
+    func start(instrument: Instrument, profile: HoldingProfile, skip: Set<Int> = [], context: Context) {
         guard !isRunning else { return }
-        stageStatus = Dictionary(uniqueKeysWithValues: StageSpec.all.map { ($0.id, .pending) })
+        let skip = Self.cleanSkip(skip)
+        stageStatus = Dictionary(uniqueKeysWithValues: StageSpec.all.map { ($0.id, skip.contains($0.id) ? .skipped : .pending) })
         runningCost = 0
         run = AnalysisRun(id: UUID(), instrument: instrument, profile: profile, startedAt: Date(), finishedAt: nil,
                           lastPrice: nil, stages: [], composite: nil, verdict: nil, vetoes: [], plan: nil,
                           verifierNotes: [], totalCostUSD: 0, promptVersion: StageSpec.promptVersion, featurePackHash: "")
-        task = Task { await execute(instrument: instrument, profile: profile, context: context) }
+        task = Task { await execute(instrument: instrument, profile: profile, skip: skip, context: context) }
     }
 
     /// Runs to completion and returns the saved run (used by Hot trades). Honours task cancellation.
-    func runAndWait(instrument: Instrument, profile: HoldingProfile, context: Context) async -> AnalysisRun? {
+    func runAndWait(instrument: Instrument, profile: HoldingProfile, skip: Set<Int> = [], context: Context) async -> AnalysisRun? {
         guard !isRunning else { return nil }
-        stageStatus = Dictionary(uniqueKeysWithValues: StageSpec.all.map { ($0.id, .pending) })
+        let skip = Self.cleanSkip(skip)
+        stageStatus = Dictionary(uniqueKeysWithValues: StageSpec.all.map { ($0.id, skip.contains($0.id) ? .skipped : .pending) })
         runningCost = 0
         run = AnalysisRun(id: UUID(), instrument: instrument, profile: profile, startedAt: Date(), finishedAt: nil,
                           lastPrice: nil, stages: [], composite: nil, verdict: nil, vetoes: [], plan: nil,
                           verifierNotes: [], totalCostUSD: 0, promptVersion: StageSpec.promptVersion, featurePackHash: "")
-        await execute(instrument: instrument, profile: profile, context: context)
+        await execute(instrument: instrument, profile: profile, skip: skip, context: context)
         return phase == .done ? run : nil
     }
 
@@ -92,7 +99,7 @@ final class AnalysisEngine {
 
     // MARK: - Pipeline
 
-    private func execute(instrument: Instrument, profile: HoldingProfile, context: Context) async {
+    private func execute(instrument: Instrument, profile: HoldingProfile, skip: Set<Int>, context: Context) async {
         // 1. Data → feature packs (computed in code).
         phase = .fetchingData
         var packs: [Timeframe: String] = [:]
@@ -127,13 +134,13 @@ final class AnalysisEngine {
 
         // 2. Stages 1–9, two at a time (keeps within typical new-account rate limits).
         phase = .runningStages
-        var results: [StageResult] = []
-        let specs = StageSpec.all.filter { $0.id <= 9 }
+        var results: [StageResult] = StageSpec.all.filter { skip.contains($0.id) }.map { StageResult.skipped($0.id, name: $0.name) }
+        let specs = StageSpec.all.filter { $0.id <= 9 && !skip.contains($0.id) }
         let settings = context.settings
         // Slow-changing stages (news, events, leadership, history, sector, connected products) are reused from a
         // recent analysis of the same product and profile — cheaper repeat analyses and Hot-trades scans.
         let reused = Self.reusableStages(for: instrument, profile: profile, hours: settings.stageReuseHours,
-                                         runs: context.store.runs, now: Date())
+                                         runs: context.store.runs, now: Date()).filter { !skip.contains($0.key) }
         for s in reused.values { stageStatus[s.stage] = .done }
         // Build every job on the main actor first; child tasks receive only Sendable values.
         let jobs: [(spec: StageSpec, prompt: String, ref: ModelRef?)] = specs.filter { reused[$0.id] == nil }.map { spec in
@@ -271,6 +278,9 @@ final class AnalysisEngine {
                                                lean: evaluation.lean ?? evaluation.side, currency: instrument.currency,
                                                includeShort: !Scoring.cannotHoldShort(instrument, profile: profile))
         run?.plan = plan
+        run?.atr = atr
+        run?.planTimeframe = profile.planTimeframe
+        if let planSnap { run?.watchBaseline = WatchParams(planSnap, price: lastCandle.close) }
         run?.verifierNotes = verifierNotes
         run?.totalCostUSD = runningCost
         run?.finishedAt = Date()

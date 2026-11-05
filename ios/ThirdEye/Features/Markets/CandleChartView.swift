@@ -14,6 +14,8 @@ struct CandleChartView: UIViewRepresentable {
     var locale: String = "en-US"
     /// Support/resistance lines drawn on the chart.
     var levels: [ChartLevel] = []
+    /// Trade events (entries, exits) drawn as arrows on the bar they happened in.
+    var markers: [ChartMarker] = []
     var onCrosshair: (Candle?) -> Void = { _ in }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -42,6 +44,7 @@ struct CandleChartView: UIViewRepresentable {
         c.fitToken = fitToken
         c.locale = locale
         c.levels = levels
+        c.markers = markers
         c.flush()
     }
 
@@ -57,12 +60,14 @@ struct CandleChartView: UIViewRepresentable {
         var fitToken = ""
         var locale = "en-US"
         var levels: [ChartLevel] = []
+        var markers: [ChartMarker] = []
         var onCrosshair: (Candle?) -> Void = { _ in }
         private var sentTheme: ChartTheme?
         private var sentLocale: String?
         private var sentPayloadID: Int?
         private var sentFitToken: String?
         private var sentLevels: [ChartLevel]?
+        private var sentMarkers: [ChartMarker]?
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
             guard let body = message.body as? [String: Any], let type = body["type"] as? String else { return }
@@ -75,6 +80,7 @@ struct CandleChartView: UIViewRepresentable {
                 sentPayloadID = nil
                 sentFitToken = nil
                 sentLevels = nil
+                sentMarkers = nil
                 flush()
             case "crosshair":
                 guard let bar = body["bar"] as? [String: Any],
@@ -98,12 +104,14 @@ struct CandleChartView: UIViewRepresentable {
                 sentLocale = locale
                 sentPayloadID = nil
                 sentLevels = nil
+                sentMarkers = nil
                 web.evaluateJavaScript("thirdEye.setLocale('\(locale)')")
             }
             if let theme, theme != sentTheme {
                 sentTheme = theme
                 sentPayloadID = nil
                 sentLevels = nil
+                sentMarkers = nil
                 web.evaluateJavaScript("thirdEye.setTheme(\(theme.json))")
             }
             if let payload, payload.id != sentPayloadID {
@@ -112,12 +120,28 @@ struct CandleChartView: UIViewRepresentable {
                 sentFitToken = fitToken
                 web.evaluateJavaScript("thirdEye.setData(\(payload.json), \(payload.precision), \(fit))")
                 sentLevels = nil // price lines belong to the series; redraw after new data
+                sentMarkers = nil
             }
             if levels != sentLevels, payload != nil {
                 sentLevels = levels
-                let rows = levels.map { "{\"price\":\($0.price),\"title\":\"\($0.title)\",\"kind\":\"\($0.isSupport ? "support" : "resistance")\"}" }
-                web.evaluateJavaScript("thirdEye.setLevels([\(rows.joined(separator: ","))])")
+                let rows: [[String: Any]] = levels.map {
+                    ["price": $0.price, "title": $0.title, "kind": $0.kind.rawValue, "style": $0.dashed ? 2 : 0, "width": $0.width]
+                }
+                web.evaluateJavaScript("thirdEye.setLevels(\(Self.json(rows)))")
             }
+            if markers != sentMarkers, let payload {
+                sentMarkers = markers
+                let rows: [[String: Any]] = markers.compactMap { m in
+                    guard let bar = payload.barTime(containing: m.time) else { return nil }
+                    return ["time": bar, "kind": m.kind.rawValue, "text": m.text, "below": m.below]
+                }
+                web.evaluateJavaScript("thirdEye.setMarkers(\(Self.json(rows)))")
+            }
+        }
+
+        static func json(_ rows: [[String: Any]]) -> String {
+            guard let data = try? JSONSerialization.data(withJSONObject: rows), let s = String(data: data, encoding: .utf8) else { return "[]" }
+            return s
         }
     }
 }
@@ -132,9 +156,28 @@ private final class WeakMessageProxy: NSObject, WKScriptMessageHandler {
 }
 
 struct ChartLevel: Equatable {
+    enum Kind: String { case support, resistance, entry, stop, target, muted }
     var price: Double
     var title: String
-    var isSupport: Bool
+    var kind: Kind
+    var dashed = true
+    var width = 1
+
+    init(price: Double, title: String, isSupport: Bool) {
+        self.price = price; self.title = title; kind = isSupport ? .support : .resistance
+    }
+
+    init(price: Double, title: String, kind: Kind, dashed: Bool = true, width: Int = 1) {
+        self.price = price; self.title = title; self.kind = kind; self.dashed = dashed; self.width = width
+    }
+}
+
+struct ChartMarker: Equatable {
+    enum Kind: String { case entry, exit, stop, plan }
+    var time: Date
+    var kind: Kind
+    var text: String
+    var below: Bool
 }
 
 struct ChartTheme: Equatable {
@@ -149,7 +192,7 @@ struct ChartTheme: Equatable {
         }
         json = """
         {"background":"\(hex(palette.surface))","text":"\(hex(palette.textSecondary))","grid":"\(hex(palette.separator))",\
-        "border":"\(hex(palette.separator))","up":"\(hex(palette.up))","down":"\(hex(palette.down))"}
+        "border":"\(hex(palette.separator))","up":"\(hex(palette.up))","down":"\(hex(palette.down))","accent":"\(hex(palette.accent))"}
         """
     }
 }
@@ -159,12 +202,26 @@ struct ChartPayload {
     let json: String
     let precision: Int
     let offset: TimeInterval
+    /// Bar start times (unshifted), ascending — for placing markers.
+    let times: [Date]
+
+    /// The shifted time of the bar an event falls in, or nil if it is outside the loaded bars.
+    func barTime(containing date: Date) -> Int? {
+        guard let first = times.first, date >= first else { return nil }
+        var lo = 0, hi = times.count - 1
+        while lo < hi {
+            let mid = (lo + hi + 1) / 2
+            if times[mid] <= date { lo = mid } else { hi = mid - 1 }
+        }
+        return Int(times[lo].timeIntervalSince1970 + offset)
+    }
 
     init(candles: [Candle], precision: Int, timeZone: TimeZone) {
         // Lightweight Charts shows UTC; shift so the axis reads in the market's local time.
         let offset = TimeInterval(timeZone.secondsFromGMT(for: candles.last?.time ?? Date()))
         self.offset = offset
         self.precision = precision
+        times = candles.map(\.time)
         var hasher = Hasher()
         hasher.combine(candles.count)
         hasher.combine(candles.first?.time)

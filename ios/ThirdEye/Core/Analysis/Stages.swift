@@ -142,7 +142,7 @@ nonisolated enum Prompts {
         if !priorStages.isEmpty {
             lines.append("\nSTAGES 1–9 (validated):")
             for s in priorStages.sorted(by: { $0.stage < $1.stage }) {
-                lines.append("- Stage \(s.stage) \(s.name): score \(s.score), confidence \(String(format: "%.2f", s.confidence)), \(s.status == .done ? s.summary : "UNAVAILABLE")")
+                lines.append("- Stage \(s.stage) \(s.name): score \(s.score), confidence \(String(format: "%.2f", s.confidence)), \(s.status == .done ? s.summary : s.status == .skipped ? "SKIPPED by the user (not analysed — do not assume anything about it)" : "UNAVAILABLE")")
             }
         }
         if spec.webSearch {

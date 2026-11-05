@@ -4,8 +4,11 @@ struct TradeDetailView: View {
     @Environment(TradeStore.self) private var store
     @Environment(MarketStore.self) private var market
     @Environment(AnalysisStore.self) private var analyses
+    @Environment(AppSettings.self) private var settings
+    @Environment(TradeGuardian.self) private var guardian
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     let tradeID: UUID
     let prices: PriceBook
 
@@ -44,6 +47,16 @@ struct TradeDetailView: View {
                 LabeledContent("Complete by", value: t.completeBy.formatted(date: .abbreviated, time: .omitted))
             }
 
+            Section {
+                TradeChartView(instrument: t.instrument, levels: TradeChart.levels(t), markers: TradeChart.markers(t),
+                               defaultTimeframe: TradeWatch.timeframe(for: t, run: run(t)))
+                    .listRowInsets(EdgeInsets(top: 10, leading: 8, bottom: 10, trailing: 8))
+            } header: {
+                Text("Chart")
+            } footer: {
+                Text("Dashed blue: entry zone · solid blue: your average entry · red: stop · green: take-profits (✓ booked). Arrows mark when you entered and exited.")
+            }
+
             if t.status == .open || t.status == .closed {
                 Section("Profit & loss (\(cur))") {
                     LabeledContent("Invested", value: money(s.invested, cur))
@@ -77,6 +90,15 @@ struct TradeDetailView: View {
                     }
                 }
                 LabeledContent("Planned quantity", value: t.plannedQuantity.formatted())
+            }
+
+            if t.status == .open {
+                watchSection(t, price: price)
+            } else if t.status == .upcoming {
+                Section("Trade watch") {
+                    Text("Starts when you record your entry: Third Eye then re-checks the reasons for this trade and tells you if they change.")
+                        .font(.caption).foregroundStyle(palette.textSecondary)
+                }
             }
 
             if !t.fills.isEmpty {
@@ -146,6 +168,127 @@ struct TradeDetailView: View {
                 await prices.refresh([t.instrument], market: market)
                 try? await Task.sleep(for: .seconds(30))
             }
+        }
+    }
+}
+
+extension TradeDetailView {
+    private func run(_ t: Trade) -> AnalysisRun? {
+        t.analysisID.flatMap { id in analyses.runs.first { $0.id == id } }
+    }
+
+    @ViewBuilder
+    func watchSection(_ t: Trade, price: Double?) -> some View {
+        let check = guardian.current(for: t)
+        let busy = guardian.working.contains(t.id)
+        let reviewing = guardian.reviewing.contains(t.id)
+        let tf = TradeWatch.timeframe(for: t, run: run(t))
+        Section {
+            if let check {
+                HStack {
+                    Chip(text: check.status.title, color: color(check.status))
+                    Spacer()
+                    Text("checked \(check.at.formatted(date: .omitted, time: .shortened)) · \(FeatureEngine.plain(check.price))\(check.r.map { String(format: " · %+.2fR", $0) } ?? "")")
+                        .font(.caption.monospacedDigit()).foregroundStyle(palette.textSecondary)
+                }
+                if check.changes.isEmpty {
+                    Text("Nothing important changed since the analysis — trend, swings, momentum, volatility and key levels are as planned.")
+                        .font(.callout).foregroundStyle(palette.textSecondary)
+                }
+                ForEach(check.changes) { c in
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: c.effect == .adverse ? "arrow.down.right.circle.fill" : c.effect == .favourable ? "arrow.up.right.circle.fill" : "info.circle.fill")
+                            .foregroundStyle(c.effect == .adverse ? palette.down : c.effect == .favourable ? palette.up : palette.accent)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(c.title).font(.callout.weight(.semibold))
+                            Text("\(c.before) → \(c.now)").font(.caption.monospacedDigit()).foregroundStyle(palette.textSecondary)
+                            Text(c.advice).font(.caption)
+                        }
+                    }
+                }
+                if let trail = check.trail {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Trail the stop to \(FeatureEngine.plain(trail.price))", systemImage: "arrow.up.and.down.circle")
+                            .font(.callout.weight(.semibold)).foregroundStyle(palette.accent)
+                        Text("\(trail.reason). If hit: \(String(format: "%+.2fR", trail.lockedR)).").font(.caption).foregroundStyle(palette.textSecondary)
+                        Button("Move my stop to \(FeatureEngine.plain(trail.price))") { guardian.applyStop(trail.price, to: t.id, trades: store) }
+                            .font(.callout)
+                    }
+                }
+            } else {
+                Text(busy ? "Reading the \(tf.label) chart…" : "Not checked yet.").font(.callout).foregroundStyle(palette.textSecondary)
+            }
+            if let err = guardian.errors[t.id] { Text(err).font(.caption).foregroundStyle(palette.warning) }
+            Button {
+                Task { await guardian.check(t.id, trades: store, market: market, analyses: analyses, settings: settings, askAI: false, allowAutoAI: false) }
+            } label: {
+                Label(busy && !reviewing ? "Checking…" : "Check now", systemImage: "eye")
+            }
+            .disabled(busy)
+        } header: {
+            Text("Trade watch")
+        } footer: {
+            Text("Compares what this trade was based on — trend, swing structure, momentum, volatility and the key \(t.isLong ? "support" : "resistance") — with the \(tf.label) chart now, every \(Int(TradeWatch.interval(tf) / 60)) min while Third Eye is open. You get a notification when something important changes. The PC monitor also alerts 24×7 if the key level breaks.")
+        }
+
+        Section {
+            if let ai = check?.ai ?? t.lastAIReview {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(ai.actionTitle).font(.headline).foregroundStyle(ai.action == "exit" ? palette.down : ai.action == "hold" ? palette.textPrimary : palette.accent)
+                        Spacer()
+                        Chip(text: ai.status.title, color: color(ai.status))
+                    }
+                    if let b = ai.bookPercent, ai.action == "book_partial" { Text("Book about \(Int(b))% of what is open.").font(.callout) }
+                    Text(ai.summary).font(.callout)
+                    ForEach(ai.points, id: \.self) { Text("• \($0)").font(.caption) }
+                    if let ns = ai.newStop {
+                        Button("Move my stop to \(FeatureEngine.plain(ns))") { guardian.applyStop(ns, to: t.id, trades: store) }
+                            .font(.callout)
+                    }
+                    ForEach(ai.warnings, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").font(.caption2).foregroundStyle(palette.warning) }
+                    ForEach(ai.sources, id: \.self) { src in
+                        Button { if let u = URL(string: src.url) { openURL(u) } } label: { Text(src.title).font(.caption).lineLimit(1) }
+                    }
+                    Text("\(ai.model) · $\(String(format: "%.3f", ai.costUSD)) · \(ai.at.formatted(date: .abbreviated, time: .shortened))")
+                        .font(.caption2.monospaced()).foregroundStyle(palette.textSecondary)
+                }
+            }
+            Button {
+                Task { await guardian.check(t.id, trades: store, market: market, analyses: analyses, settings: settings, askAI: true) }
+            } label: {
+                Label(reviewing ? "AI is re-checking…" : "Ask AI to re-check now", systemImage: "sparkles")
+            }
+            .disabled(busy)
+        } header: {
+            Text("AI re-check")
+        } footer: {
+            Text(settings.autoAIReview
+                 ? "Runs by itself (at most every \(Int(TradeGuardian.aiCooldown(tf) / 3600)) h) when the watch finds an important change, using your Balanced model — about $0.01–0.05 each. Its advice is checked in code: it can never widen your stop or add to a losing trade."
+                 : "Automatic AI re-checks are off (Settings). Tap to run one — about $0.01–0.05 on your Balanced model.")
+        }
+
+        if let log = t.watchLog, log.count > 1 {
+            Section("Watch history") {
+                ForEach(log.dropFirst()) { c in
+                    HStack(alignment: .top) {
+                        Chip(text: c.status.title, color: color(c.status))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(c.ai?.actionTitle ?? c.changes.first?.title ?? "No change").font(.caption.weight(.semibold))
+                            Text(c.at.formatted(date: .abbreviated, time: .shortened)).font(.caption2).foregroundStyle(palette.textSecondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func color(_ s: WatchStatus) -> Color {
+        switch s {
+        case .strengthened: palette.up
+        case .intact: palette.neutral
+        case .weakened: palette.warning
+        case .broken: palette.down
         }
     }
 }

@@ -66,6 +66,8 @@ nonisolated enum HoldingProfile: String, CaseIterable, Identifiable, Codable, Se
 
 nonisolated enum StageStatus: String, Codable, Sendable {
     case pending, running, done, unavailable
+    /// Turned off by the user before the run: not asked, not counted — its weight goes to the other stages.
+    case skipped
 }
 
 nonisolated struct StageReason: Codable, Hashable, Sendable {
@@ -105,6 +107,12 @@ nonisolated struct StageResult: Codable, Hashable, Sendable, Identifiable {
 
     /// Version-1 confidence-shrunk score (low confidence pulls toward 50). Only used to explain older runs.
     var effectiveScore: Double { 50 + confidence * (Double(score) - 50) }
+
+    static func skipped(_ stage: Int, name: String) -> StageResult {
+        StageResult(stage: stage, name: name, status: .skipped, score: 50, direction: "neutral", confidence: 0,
+                    summary: "Skipped by you — its weight is shared by the other stages.", reasons: [], sources: [], warnings: [],
+                    provider: nil, model: nil, usedWebSearch: false, usage: AIUsage(), costUSD: 0, rawOutput: "")
+    }
 
     static func unavailable(_ stage: Int, name: String, reason: String) -> StageResult {
         StageResult(stage: stage, name: name, status: .unavailable, score: 50, direction: "neutral", confidence: 0,
@@ -190,6 +198,13 @@ nonisolated struct AnalysisRun: Codable, Hashable, Sendable, Identifiable {
     var watchLevels: [String]? = nil
     var evidence: Double? = nil
     var baseRate: PlanReplay.BaseRate? = nil
+    // 0.9.1+
+    var atr: Double? = nil                 // ATR(14) on the plan's timeframe when analysed
+    var planTimeframe: Timeframe? = nil
+    var watchBaseline: WatchParams? = nil  // the parameters the trade watch compares against
+
+    /// Stages the user turned off for this run.
+    var skippedStages: [Int] { stages.filter { $0.status == .skipped }.map(\.stage) }
 
     var buyScore: Int? { composite }
     var sellScore: Int? { composite.map { 1010 - $0 } }

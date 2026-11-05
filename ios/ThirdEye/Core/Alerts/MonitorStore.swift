@@ -31,9 +31,50 @@ nonisolated struct MonitorWatchTrade: Codable, Hashable, Sendable {
     var avgEntry: Double?
     var openQuantity: Double
     var targets: [Target]
+    var levels: [Level]? = nil
     var completeBy: Date
     var cadenceSeconds: Int
     var updatedAt: Date
+
+    /// A chart level the trade's reasons rest on (from the analysis); the PC alerts once when it is crossed.
+    nonisolated struct Level: Codable, Hashable, Sendable {
+        var key: String
+        var price: Double
+        var above: Bool
+        var title: String
+        var body: String
+        var urgent: Bool
+    }
+
+    /// Key support/resistance from the trade watch baseline. Support below a long only matters above the stop
+    /// (otherwise the stop alert covers it); the same for resistance above a short.
+    static func levels(_ t: Trade) -> [Level]? {
+        guard t.status == .open, let b = t.watchBaseline else { return nil }
+        var out: [Level] = []
+        let sym = t.instrument.symbol
+        if t.isLong {
+            if let s = b.support, s > t.stopLoss {
+                out.append(Level(key: "support", price: s, above: false, title: "⚠️ \(sym) · key support broken",
+                                 body: "Traded below \(FeatureEngine.plain(s)), the support the long case rested on. Open Third Eye for the trade watch and AI re-check; consider exiting or tightening the stop.",
+                                 urgent: true))
+            }
+            if let r = b.resistance {
+                out.append(Level(key: "breakout", price: r, above: true, title: "📈 \(sym) · broke above resistance",
+                                 body: "Above \(FeatureEngine.plain(r)). Consider trailing the stop rather than exiting early.", urgent: false))
+            }
+        } else {
+            if let r = b.resistance, r < t.stopLoss {
+                out.append(Level(key: "resistance", price: r, above: true, title: "⚠️ \(sym) · key resistance broken",
+                                 body: "Traded above \(FeatureEngine.plain(r)), the resistance the short case rested on. Open Third Eye for the trade watch and AI re-check; consider exiting or tightening the stop.",
+                                 urgent: true))
+            }
+            if let s = b.support {
+                out.append(Level(key: "breakout", price: s, above: false, title: "📉 \(sym) · broke below support",
+                                 body: "Below \(FeatureEngine.plain(s)). Consider trailing the stop rather than exiting early.", urgent: false))
+            }
+        }
+        return out.isEmpty ? nil : out
+    }
 
     /// How often the PC checks the price while the market is open.
     static func cadence(_ badge: HoldingBadge) -> Int {
@@ -60,6 +101,7 @@ nonisolated struct MonitorWatchTrade: Codable, Hashable, Sendable {
                 Target(stage: $0.stage, price: $0.price, r: $0.rMultiple, bookPercent: $0.bookPercent, then: $0.then,
                        booked: booked.contains($0.stage))
             },
+            levels: levels(t),
             completeBy: t.completeBy, cadenceSeconds: cadence(t.badge), updatedAt: t.updatedAt)
     }
 }

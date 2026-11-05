@@ -188,3 +188,37 @@ func TestMoneyFormatting(t *testing.T) {
 		}
 	}
 }
+
+func TestLevelCrossFiresOnceAndRearms(t *testing.T) {
+	loc := time.UTC
+	now := time.Date(2026, 11, 5, 10, 0, 0, 0, loc)
+	avg := 100.0
+	tr := WatchTrade{ID: "x", Symbol: "ABC", Side: "long", Status: "open", Currency: "INR", EntryLow: 99, EntryHigh: 101,
+		Stop: 90, InitialStop: 90, AvgEntry: &avg, OpenQuantity: 10,
+		Levels: []Level{{Key: "support", Price: 95, Above: false, Title: "support broken", Body: "Below support.", Urgent: true}}}
+	m := &Memory{}
+	if a := Evaluate(tr, 97, now, m, Settings{}, loc); len(levelAlerts(a)) != 0 {
+		t.Fatalf("no cross yet: %v", a)
+	}
+	a := Evaluate(tr, 94.5, now.Add(5*time.Minute), m, Settings{}, loc)
+	if got := levelAlerts(a); len(got) != 1 || !got[0].Urgent {
+		t.Fatalf("expected one urgent level alert, got %v", a)
+	}
+	if a := Evaluate(tr, 94, now.Add(10*time.Minute), m, Settings{}, loc); len(levelAlerts(a)) != 0 {
+		t.Fatalf("must not repeat: %v", a)
+	}
+	Evaluate(tr, 101, now.Add(3*time.Hour), m, Settings{}, loc) // 6 away = 0.6R: re-armed
+	if a := Evaluate(tr, 94.9, now.Add(4*time.Hour), m, Settings{}, loc); len(levelAlerts(a)) != 1 {
+		t.Fatalf("expected re-arm after moving back: %v", a)
+	}
+}
+
+func levelAlerts(a []Alert) []Alert {
+	var out []Alert
+	for _, x := range a {
+		if x.Kind == "level" {
+			out = append(out, x)
+		}
+	}
+	return out
+}

@@ -17,9 +17,9 @@
 (function () {
   const LWC = window.LightweightCharts;
   const el = document.getElementById('chart');
-  let chart = null, candles = null, volume = null, levelLines = [];
+  let chart = null, candles = null, volume = null, levelLines = [], markerPlugin = null;
   let locale = 'en-US', precision = 2;
-  let theme = { background: '#FFFFFF', text: '#5B6573', grid: '#EEF0F3', up: '#2E9E6B', down: '#D9534F', border: '#E3E6EA' };
+  let theme = { background: '#FFFFFF', text: '#5B6573', grid: '#EEF0F3', up: '#2E9E6B', down: '#D9534F', border: '#E3E6EA', accent: '#3B6FD8' };
 
   function post(msg) {
     try { window.webkit.messageHandlers.thirdEye.postMessage(msg); } catch (e) {}
@@ -51,6 +51,7 @@
       priceFormat: { type: 'volume' }, priceScaleId: '', lastValueVisible: false, priceLineVisible: false
     });
     levelLines = [];
+    markerPlugin = null;
     volume.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
     chart.subscribeCrosshairMove(function (p) {
       if (!p || !p.time || !p.seriesData) { post({ type: 'crosshair', bar: null }); return; }
@@ -79,16 +80,29 @@
         else chart.timeScale().fitContent();
       }
     },
-    // levels: [{price, title, kind: 'support'|'resistance'}]
+    // levels: [{price, title, kind: 'support'|'resistance'|'entry'|'stop'|'target'|'muted', style?: 0 solid · 2 dashed, width?}]
     setLevels: function (levels) {
       if (!candles) return;
       levelLines.forEach(function (l) { candles.removePriceLine(l); });
+      const colors = { support: theme.up + 'AA', resistance: theme.down + 'AA', entry: theme.accent, stop: theme.down,
+                       target: theme.up, muted: theme.text + '99' };
       levelLines = levels.map(function (l) {
         return candles.createPriceLine({
-          price: l.price, title: l.title, lineWidth: 1, lineStyle: 2, axisLabelVisible: true,
-          color: (l.kind === 'support' ? theme.up : theme.down) + 'AA'
+          price: l.price, title: l.title, lineWidth: l.width || 1, lineStyle: (l.style === undefined ? 2 : l.style),
+          axisLabelVisible: true, color: colors[l.kind] || theme.text
         });
       });
+    },
+    // markers: [{time (shifted seconds, a bar's time), kind: 'entry'|'exit'|'stop'|'plan', text, below: bool}]
+    setMarkers: function (markers) {
+      if (!candles) return;
+      const colors = { entry: theme.accent, exit: theme.up, stop: theme.down, plan: theme.text };
+      const list = markers.slice().sort(function (a, b) { return a.time - b.time; }).map(function (m) {
+        return { time: m.time, position: m.below ? 'belowBar' : 'aboveBar', color: colors[m.kind] || theme.text,
+                 shape: m.kind === 'plan' ? 'circle' : (m.below ? 'arrowUp' : 'arrowDown'), text: m.text };
+      });
+      if (!markerPlugin) markerPlugin = LWC.createSeriesMarkers(candles, list);
+      else markerPlugin.setMarkers(list);
     },
     clear: function () { if (candles) { candles.setData([]); volume.setData([]); } }
   };

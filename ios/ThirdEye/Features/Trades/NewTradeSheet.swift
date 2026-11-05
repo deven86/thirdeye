@@ -235,7 +235,7 @@ struct NewTradeSheet: View {
                           mode: settings.paperMode ? .paper : .real, side: p.side, status: .upcoming,
                           plannedEntryLow: p.entryLow, plannedEntryHigh: p.entryHigh, stopLoss: p.stopLoss, initialStop: p.stopLoss,
                           takeProfits: p.takeProfits, plannedQuantity: q, badge: p.badge, completeBy: p.completeBy,
-                          notes: notes, againstVerdict: againstVerdict)
+                          notes: notes, againstVerdict: againstVerdict, watchBaseline: run?.watchBaseline)
         store.save(trade)
         dismiss()
     }

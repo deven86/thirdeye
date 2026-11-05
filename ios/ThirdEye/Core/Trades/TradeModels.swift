@@ -49,8 +49,13 @@ nonisolated struct Trade: Codable, Hashable, Sendable, Identifiable {
     var createdAt = Date()
     var updatedAt = Date()
     var closedAt: Date?
+    // 0.9.1+ trade watch (optional so older saved trades still load)
+    var watchBaseline: WatchParams?
+    var watchLog: [TradeCheck]?
 
     var isLong: Bool { side == "long" }
+    var lastCheck: TradeCheck? { watchLog?.first }
+    var lastAIReview: AIReview? { watchLog?.compactMap(\.ai).first }
     var plannedEntryMid: Double { (plannedEntryLow + plannedEntryHigh) / 2 }
 }
 

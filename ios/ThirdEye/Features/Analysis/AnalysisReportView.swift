@@ -4,6 +4,7 @@ import SwiftUI
 struct AnalysisReportView: View {
     @Environment(\.palette) private var palette
     @Environment(\.openURL) private var openURL
+    @Environment(AppSettings.self) private var settings
     let run: AnalysisRun
     @State private var showNewTrade = false
 
@@ -18,6 +19,9 @@ struct AnalysisReportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 scoreCard
+                ActionPlanCard(plan: ActionPlanner.build(run, inputs: .init(capital: settings.capital[run.instrument.currency],
+                                                                             riskPercent: settings.riskPercent,
+                                                                             paperMode: settings.paperMode)))
                 if let checks = run.checks, !checks.isEmpty {
                     checksCard(checks)
                 } else if !run.vetoes.isEmpty {
@@ -35,6 +39,13 @@ struct AnalysisReportView: View {
                 }
                 if let plan = run.plan {
                     PlanCard(plan: plan, tradable: verdict != .noTrade, currency: run.instrument.currency)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Plan on the chart").font(.headline).foregroundStyle(palette.textPrimary)
+                        TradeChartView(instrument: run.instrument, levels: TradeChart.levels(plan),
+                                       markers: [ChartMarker(time: run.startedAt, kind: .plan, text: "Analysed", below: plan.side != "long")],
+                                       defaultTimeframe: run.planTimeframe ?? run.profile.planTimeframe, height: 260)
+                    }
+                    .dataCard(padding: 10)
                     if let base = run.baseRate { BaseRateCard(base: base, symbol: run.instrument.symbol) }
                     AdaptiveButton(title: "Save as upcoming trade", systemImage: "bookmark", kind: verdict == .noTrade ? .secondary : .primary) {
                         showNewTrade = true
@@ -142,7 +153,7 @@ struct AnalysisReportView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("How this score was calculated").font(.headline).foregroundStyle(palette.textPrimary)
             Text(isV2
-                 ? "Score = 10 × the confidence-weighted average of the completed stages: each stage counts by weight (\(run.profile.title) profile) × confidence. Low confidence makes a stage count less; it no longer drags the score toward 500. Failed stages are left out."
+                 ? "Score = 10 × the confidence-weighted average of the completed stages: each stage counts by weight (\(run.profile.title) profile) × confidence. Low confidence makes a stage count less; it no longer drags the score toward 500. Failed and skipped stages are left out, so their weight is shared by the others."
                  : "Older method (before 0.8): each stage score was pulled toward 50 when confidence was low — effective = 50 + confidence × (score − 50) — then multiplied by its weight. This squeezed almost every result into the No-trade band.")
                 .font(.caption)
                 .foregroundStyle(palette.textSecondary)
@@ -187,6 +198,44 @@ struct AnalysisReportView: View {
         }
         .font(.caption2)
         .foregroundStyle(palette.textSecondary)
+    }
+}
+
+/// "What to do": the step-by-step playbook, collapsed to the headline and first steps until opened.
+private struct ActionPlanCard: View {
+    @Environment(\.palette) private var palette
+    let plan: ActionPlan
+    @State private var expanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("What to do", systemImage: plan.tone == .trade ? "checklist" : "hourglass")
+                .font(.headline)
+                .foregroundStyle(plan.tone == .trade ? palette.up : palette.accent)
+            Text(plan.headline).font(.callout.weight(.semibold)).foregroundStyle(palette.textPrimary)
+            ForEach(expanded ? plan.steps : Array(plan.steps.prefix(2))) { step in
+                VStack(alignment: .leading, spacing: 4) {
+                    Label(step.title, systemImage: step.icon).font(.subheadline.weight(.semibold)).foregroundStyle(palette.textPrimary)
+                    ForEach(step.lines, id: \.self) { line in
+                        HStack(alignment: .top, spacing: 6) {
+                            Text("•").foregroundStyle(palette.textSecondary)
+                            Text(line).font(.callout).foregroundStyle(palette.textPrimary).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(.top, 2)
+            }
+            if plan.steps.count > 2 {
+                Button(expanded ? "Show less" : "Show all \(plan.steps.count) steps — size, stop, targets, trailing, what if it goes wrong") {
+                    withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
+                }
+                .font(.callout.weight(.semibold))
+            }
+            Text("Built in code from this plan and your risk settings. An analytical aid, not investment advice.")
+                .font(.caption2).foregroundStyle(palette.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dataCard()
     }
 }
 
@@ -312,7 +361,7 @@ private struct StageCard: View {
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text(result.status == .done ? "\(result.score)" : "—")
+                        Text(result.status == .done ? "\(result.score)" : result.status == .skipped ? "off" : "—")
                             .font(.title3.weight(.bold).monospacedDigit())
                             .foregroundStyle(result.score >= 56 ? palette.up : result.score <= 44 ? palette.down : palette.neutral)
                         Text("weight \(Int(weight))").font(.caption2).foregroundStyle(palette.textSecondary)

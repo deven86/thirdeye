@@ -230,6 +230,11 @@ nonisolated enum FeatureEngine {
         price < 1 ? 5 : price < 10 ? 4 : 2
     }
 
+    /// A price with sensible decimals and no grouping, for messages.
+    static func plain(_ price: Double) -> String {
+        String(format: "%.\(decimals(abs(price)))f", price)
+    }
+
     /// Compact JSON for the AI (Milestone 4). Keeps tokens low: id → display text.
     static func featurePackJSON(_ s: Snapshot, instrument: Instrument) -> String {
         var dict: [String: Any] = [
