@@ -4,7 +4,7 @@ struct AIProvidersView: View {
     @Environment(ModelCatalog.self) private var catalog
 
     var body: some View {
-        List {
+        List { Group {
             Section {
                 ForEach(AIProviderKind.allCases) { provider in
                     NavigationLink {
@@ -16,7 +16,9 @@ struct AIProvidersView: View {
             } footer: {
                 Text("Add at least one key. Claude is the primary provider in the spec; OpenAI and Gemini are optional. Set a monthly spending limit in each provider's console.")
             }
+        }.skinRows()
         }
+        .skinScreen()
         .navigationTitle("AI Providers")
         .refreshable { await catalog.refreshAllConnected() }
     }
@@ -64,7 +66,7 @@ struct ProviderDetailView: View {
     @State private var confirmRemove = false
 
     var body: some View {
-        Form {
+        Form { Group {
             if catalog.hasKey[provider] == true {
                 Section("Saved key") {
                     HStack {
@@ -117,7 +119,9 @@ struct ProviderDetailView: View {
                     }
                 }
             }
+        }.skinRows()
         }
+        .skinScreen()
         .navigationTitle(provider.shortName)
         .confirmationDialog("Remove the \(provider.shortName) key from this iPhone and your iPad?",
                             isPresented: $confirmRemove, titleVisibility: .visible) {

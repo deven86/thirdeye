@@ -14,7 +14,7 @@ struct MarketDataSettingsView: View {
     @State private var confirmRemoveUpstox = false
 
     var body: some View {
-        Form {
+        Form { Group {
             upstoxSection
             twelveDataSection
 
@@ -58,7 +58,9 @@ struct MarketDataSettingsView: View {
             if let message {
                 Section { Text(message).foregroundStyle(palette.warning) }
             }
+        }.skinRows()
         }
+        .skinScreen()
         .navigationTitle("Market Data")
         .sheet(isPresented: $showLogin) { UpstoxLoginSheet() }
         .confirmationDialog("Remove your Upstox API key and secret from this iPhone and your iPad?",

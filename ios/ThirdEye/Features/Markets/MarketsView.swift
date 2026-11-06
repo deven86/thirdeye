@@ -8,7 +8,7 @@ struct MarketsView: View {
     @State private var results: [Instrument] = []
 
     var body: some View {
-        List {
+        List { Group {
             if query.isEmpty {
                 Section {
                     ForEach(market.watchlist) { instrument in
@@ -36,7 +36,9 @@ struct MarketsView: View {
                     }
                 }
             }
+        }.skinRows()
         }
+        .skinScreen()
         .navigationTitle("Markets")
         .navigationDestination(for: Instrument.self) { InstrumentDetailView(instrument: $0) }
         .searchable(text: $query, prompt: "Stock, index, F&O, forex, crypto…")

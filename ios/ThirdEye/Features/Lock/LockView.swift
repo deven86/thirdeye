@@ -8,7 +8,7 @@ struct LockView: View {
 
     var body: some View {
         ZStack {
-            palette.background.ignoresSafeArea()
+            SkinBackdrop()
             VStack(spacing: 28) {
                 Spacer()
                 ScoreGauge(score: 900)

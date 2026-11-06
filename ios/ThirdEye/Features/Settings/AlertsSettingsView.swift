@@ -18,14 +18,16 @@ struct AlertsSettingsView: View {
     private static let guideURL = URL(string: "https://github.com/deven86/thirdeye/blob/main/docs/ALERTS.md")!
 
     var body: some View {
-        List {
+        List { Group {
             statusSection
             if !monitor.isPaired { pairSection }
             notificationsSection
             if monitor.isPaired { actionsSection }
             if let rows = monitor.status?.trades, !rows.isEmpty { watchingSection(rows) }
             if let alerts = monitor.status?.alerts, !alerts.isEmpty { historySection(alerts) }
+        }.skinRows()
         }
+        .skinScreen()
         .navigationTitle("Alerts")
         .task {
             if address.isEmpty { address = monitor.address }

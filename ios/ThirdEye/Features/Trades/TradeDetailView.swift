@@ -41,7 +41,7 @@ struct TradeDetailView: View {
         let price = prices.price(t.instrument)
         let s = TradeMath.summary(t, lastPrice: price)
         let cur = t.instrument.currency
-        return List {
+        return List { Group {
             Section {
                 HStack {
                     Text(t.side.uppercased()).font(.headline).foregroundStyle(t.isLong ? palette.up : palette.down)
@@ -225,7 +225,9 @@ struct TradeDetailView: View {
                 Text("Keep a real stop-loss order at your broker. This app does not place orders, and in-app hints only update while the app is open.")
                     .font(.caption).foregroundStyle(palette.textSecondary)
             }
+        }.skinRows()
         }
+        .skinScreen()
         .navigationTitle(t.instrument.fullSymbol)
         .sheet(item: $sheet) { kind in FillSheet(kind: kind, trade: t, price: price) }
         .sheet(item: $editingFill) { f in FillSheet(kind: f.kind == .entry ? .entry : .exit, trade: t, price: price, editing: f) }
@@ -408,7 +410,7 @@ struct FillSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            Form { Group {
                 Section {
                     LabeledContent("Price") { TextField("0", text: $priceText).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
                     LabeledContent(trade.instrument.contractSize > 1 ? "Lots" : "Quantity") { TextField("0", text: $quantityText).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
@@ -434,7 +436,9 @@ struct FillSheet: View {
                         Button("Delete this fill", role: .destructive) { store.deleteFill(trade, id: editing.id); dismiss() }
                     }
                 }
-            }
+            }.skinRows()
+        }
+        .skinScreen()
             .navigationTitle(editing != nil ? "Correct fill" : kind == .entry ? "Record entry" : "Record exit")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -537,7 +541,7 @@ struct EditPlanSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            Form { Group {
                 Section("Entry zone") {
                     row("Low", $entryLow)
                     row("High", $entryHigh)
@@ -565,7 +569,9 @@ struct EditPlanSheet: View {
                 if !problems.isEmpty {
                     Section { ForEach(problems, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(palette.warning) } }
                 }
-            }
+            }.skinRows()
+        }
+        .skinScreen()
             .navigationTitle("Edit plan")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

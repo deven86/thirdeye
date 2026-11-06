@@ -52,6 +52,7 @@ struct PortfolioView: View {
             }
             .padding()
         }
+        .skinScreen()
         .background(palette.background)
         .navigationTitle("Portfolio")
         .onAppear { mode = settings.paperMode ? .paper : .real }

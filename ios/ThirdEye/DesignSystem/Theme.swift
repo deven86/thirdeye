@@ -164,11 +164,18 @@ struct ThemeHost<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        let palette = settings.theme.palette(colorBlindSafe: settings.colorBlindSafe, systemScheme: systemScheme)
-        content
+        let skin = settings.skin != .none
+        var palette = skin
+            // A skin is always dark glass: white text over a dimmed wallpaper, whatever the theme.
+            ? (settings.theme == .highContrast ? AppTheme.highContrast : AppTheme.liquidGlass)
+                .palette(colorBlindSafe: settings.colorBlindSafe, systemScheme: .dark)
+            : settings.theme.palette(colorBlindSafe: settings.colorBlindSafe, systemScheme: systemScheme)
+        if skin { palette.background = .clear }
+        return content
             .environment(\.palette, palette)
+            .environment(\.skinActive, skin)
             .environment(\.glassAllowed, settings.theme.allowsGlass && !reduceTransparency)
             .tint(palette.accent)
-            .preferredColorScheme(settings.theme.colorScheme)
+            .preferredColorScheme(skin ? .dark : settings.theme.colorScheme)
     }
 }

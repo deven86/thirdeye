@@ -85,7 +85,7 @@ struct NewTradeSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            Form { Group {
                 Section {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("\(instrument.fullSymbol) · \(instrument.name)").font(.callout.weight(.semibold))
@@ -166,7 +166,9 @@ struct NewTradeSheet: View {
                     LabeledContent("Mode", value: settings.paperMode ? "Paper" : "Real money")
                     if let p = preview { LabeledContent("Complete by", value: p.completeBy.formatted(date: .abbreviated, time: .omitted)) }
                 }
-            }
+            }.skinRows()
+        }
+        .skinScreen()
             .navigationTitle(plan == nil ? "Track a trade" : "New upcoming trade")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

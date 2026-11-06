@@ -10,7 +10,7 @@ struct ReportCardView: View {
     var body: some View {
         let card = ReportCard.build(runs: analyses.runs, outcomes: outcomes.outcomes)
         let pending = outcomes.pending(analyses.runs)
-        List {
+        List { Group {
             Section {
                 HStack {
                     metric("Graded", "\(card.graded)")
@@ -80,7 +80,9 @@ struct ReportCardView: View {
             } footer: {
                 Text("How often a stage that leaned up (score ≥ 55) or down (≤ 45) was right. After about 50 results per stage, the weak ones can be given less weight — that is the calibration step.")
             }
+        }.skinRows()
         }
+        .skinScreen()
         .navigationTitle("Report card")
         .task { await outcomes.gradeDue(analyses.runs, market: market) }
     }

@@ -16,7 +16,7 @@ struct TradesView: View {
     }
 
     var body: some View {
-        List {
+        List { Group {
             Section {
                 Picker("Show", selection: $tab) {
                     Text("Upcoming (\(store.trades(.upcoming).count))").tag(TradeStatus.upcoming)
@@ -38,7 +38,9 @@ struct TradesView: View {
                     }
                 }
             }
+        }.skinRows()
         }
+        .skinScreen()
         .navigationTitle("Trades")
         .toolbar {
             if market.hasUpstoxKeys {
@@ -210,7 +212,9 @@ private struct WatchlistPicker: View {
                         chosen = i
                     }
                 } label: { InstrumentRow(instrument: i) }
+                .skinRows()
             }
+            .skinScreen()
             .navigationTitle("Choose a product")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }

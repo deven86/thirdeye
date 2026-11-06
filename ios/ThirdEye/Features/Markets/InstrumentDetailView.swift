@@ -56,6 +56,7 @@ struct InstrumentDetailView: View {
             }
             .padding()
         }
+        .skinScreen()
         .background(palette.background)
         .navigationTitle(instrument.symbol)
         .navigationBarTitleDisplayMode(.inline)

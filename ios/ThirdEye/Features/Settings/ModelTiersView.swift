@@ -7,7 +7,7 @@ struct ModelTiersView: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Form {
+        Form { Group {
             if catalog.allModels.isEmpty {
                 Section {
                     Label("Connect an AI provider first, then come back here.", systemImage: "key")
@@ -50,7 +50,9 @@ struct ModelTiersView: View {
             } footer: {
                 Text("Suggestions use the model name (e.g. Haiku → Fast, Sonnet → Balanced, Opus → Deep). Check them — model line-ups change often.")
             }
+        }.skinRows()
         }
+        .skinScreen()
         .navigationTitle("Model Tiers")
     }
 
@@ -67,7 +69,7 @@ struct ThemePickerView: View {
     @Environment(\.colorScheme) private var systemScheme
 
     var body: some View {
-        List {
+        List { Group {
             ForEach(AppTheme.allCases) { theme in
                 let palette = theme.palette(colorBlindSafe: settings.colorBlindSafe, systemScheme: systemScheme)
                 Button {
@@ -96,7 +98,9 @@ struct ThemePickerView: View {
                 }
                 .accessibilityAddTraits(settings.theme == theme ? .isSelected : [])
             }
+        }.skinRows()
         }
+        .skinScreen()
         .navigationTitle("Theme")
     }
 }

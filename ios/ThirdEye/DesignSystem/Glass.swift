@@ -44,9 +44,23 @@ private struct FloatingGlassModifier<S: Shape>: ViewModifier {
 
 private struct DataCardModifier: ViewModifier {
     @Environment(\.palette) private var palette
+    @Environment(\.skinActive) private var skinActive
+    @Environment(\.glassAllowed) private var glassAllowed
     let padding: CGFloat
 
     func body(content: Content) -> some View {
+        if skinActive && glassAllowed {
+            // Skin on: the card is Liquid Glass over the wallpaper.
+            content
+                .padding(padding)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        } else {
+            solid(content)
+        }
+    }
+
+    private func solid(_ content: Content) -> some View {
         content
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)

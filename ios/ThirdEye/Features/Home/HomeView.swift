@@ -182,6 +182,7 @@ struct HomeView: View {
             }
             .padding()
         }
+        .skinScreen()
         .background(palette.background)
         .navigationTitle("Home")
     }

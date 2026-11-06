@@ -16,7 +16,7 @@ struct UpstoxSyncView: View {
 
     var body: some View {
         @Bindable var settings = settings
-        List {
+        List { Group {
             Section {
                 HStack {
                     Image(systemName: market.upstoxLoggedIn ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
@@ -172,7 +172,9 @@ struct UpstoxSyncView: View {
                     Section { Label("Third Eye matches your Upstox account.", systemImage: "checkmark.seal").foregroundStyle(palette.up) }
                 }
             }
+        }.skinRows()
         }
+        .skinScreen()
         .navigationTitle("Upstox")
         .navigationDestination(item: $openTrade) { id in TradeDetailView(tradeID: id, prices: prices) }
         .task { if sync.plan == nil { await sync.sync(trades: trades, market: market, settings: settings) } }

@@ -44,7 +44,7 @@ struct AnalyseSheet: View {
         let blockers = AnalysisEngine.blockers(settings: settings)
         let estimate = AnalysisEngine.estimate(settings: settings, skip: skip)
         let activeWeight = profile.weights.enumerated().filter { !skip.contains($0.offset + 1) }.reduce(0.0) { $0 + $1.element }
-        return Form {
+        return Form { Group {
             if !blockers.isEmpty {
                 Section {
                     ForEach(blockers, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(palette.warning) }
@@ -133,7 +133,9 @@ struct AnalyseSheet: View {
                 }
                 .disabled(!blockers.isEmpty)
             }
+        }.skinRows()
         }
+        .skinScreen()
     }
 }
 
@@ -142,7 +144,7 @@ struct AnalysisProgressView: View {
     let engine: AnalysisEngine
 
     var body: some View {
-        List {
+        List { Group {
             Section {
                 HStack(spacing: 12) {
                     if case .failed = engine.phase {
@@ -184,7 +186,9 @@ struct AnalysisProgressView: View {
                     .animation(.easeInOut(duration: 0.2), value: status)
                 }
             }
+        }.skinRows()
         }
+        .skinScreen()
     }
 
     private var phaseText: String {

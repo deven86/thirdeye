@@ -69,6 +69,7 @@ struct AnalysisReportView: View {
             }
             .padding()
         }
+        .skinScreen()
         .background(palette.background)
     }
 

@@ -24,6 +24,9 @@ final class AppSettings {
         static let autoAIReview = "settings.autoAIReview"
         static let watchNotifications = "settings.watchNotifications"
         static let autoImportUpstox = "settings.autoImportUpstox"
+        static let skin = "settings.skin"
+        static let skinDim = "settings.skinDim"
+        static let skinPhotoVersion = "settings.skinPhotoVersion"
     }
 
     private let defaults: UserDefaults
@@ -115,6 +118,21 @@ final class AppSettings {
         didSet { defaults.set(autoImportUpstox, forKey: Keys.autoImportUpstox) }
     }
 
+    /// Wallpaper skin behind every screen (Winamp-style); .none = the theme's own background.
+    var skin: Skin {
+        didSet { defaults.set(skin.rawValue, forKey: Keys.skin) }
+    }
+
+    /// 0 … 0.7 black over the wallpaper.
+    var skinDim: Double {
+        didSet { defaults.set(skinDim, forKey: Keys.skinDim) }
+    }
+
+    /// Bumped when the user picks a new photo, so cached images refresh.
+    var skinPhotoVersion: Int {
+        didSet { defaults.set(skinPhotoVersion, forKey: Keys.skinPhotoVersion) }
+    }
+
     /// Trade watch: notify on this iPhone when a trade's parameters change.
     var watchNotifications: Bool {
         didSet { defaults.set(watchNotifications, forKey: Keys.watchNotifications) }
@@ -144,6 +162,9 @@ final class AppSettings {
         autoAIReview = defaults.object(forKey: Keys.autoAIReview) as? Bool ?? true
         watchNotifications = defaults.object(forKey: Keys.watchNotifications) as? Bool ?? true
         autoImportUpstox = defaults.object(forKey: Keys.autoImportUpstox) as? Bool ?? true
+        skin = Skin(rawValue: defaults.string(forKey: Keys.skin) ?? "") ?? .none
+        skinDim = defaults.object(forKey: Keys.skinDim) as? Double ?? 0.25
+        skinPhotoVersion = defaults.integer(forKey: Keys.skinPhotoVersion)
         if let data = defaults.data(forKey: Keys.tierAssignments),
            let decoded = try? JSONDecoder().decode([String: ModelRef].self, from: data) {
             var map: [ModelTier: ModelRef] = [:]

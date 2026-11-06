@@ -13,7 +13,7 @@ struct HotTradesView: View {
 
     var body: some View {
         @Bindable var settings = settings
-        List {
+        List { Group {
             Section {
                 Picker("Market", selection: $settings.hotMarket) {
                     ForEach(HotMarket.allCases) { Text($0.title).tag($0) }
@@ -62,7 +62,9 @@ struct HotTradesView: View {
                     }
                 }
             }
+        }.skinRows()
         }
+        .skinScreen()
         .navigationTitle("Hot trades")
         .confirmationDialog("Run a hot-trades scan on \(settings.hotMarket.title)? \(settings.hotCandidates) full analyses, estimated cost ≈ $\(estimate), charged to your AI account. Takes about \(settings.hotCandidates * 2)–\(settings.hotCandidates * 3) minutes — keep the app open.",
                             isPresented: $confirm, titleVisibility: .visible) {

@@ -9,7 +9,7 @@ struct SettingsView: View {
 
     var body: some View {
         @Bindable var settings = settings
-        Form {
+        Form { Group {
             Section("Artificial intelligence") {
                 NavigationLink {
                     AIProvidersView()
@@ -101,6 +101,15 @@ struct SettingsView: View {
                         Label("Theme", systemImage: "paintpalette")
                     }
                 }
+                NavigationLink {
+                    SkinPickerView()
+                } label: {
+                    LabeledContent {
+                        Text(settings.skin.title)
+                    } label: {
+                        Label("Skin (wallpaper + glass)", systemImage: "photo.artframe")
+                    }
+                }
                 Toggle(isOn: $settings.colorBlindSafe) {
                     Label("Colour-blind-safe up/down", systemImage: "eye")
                 }
@@ -171,7 +180,9 @@ struct SettingsView: View {
                 }
                 LabeledContent("Version", value: Bundle.main.appVersionString)
             }
+        }.skinRows()
         }
+        .skinScreen()
         .navigationTitle("Settings")
     }
 }
@@ -188,8 +199,9 @@ struct DisclaimerView: View {
 
     var body: some View {
         List(items, id: \.self) { item in
-            Text(item).font(.callout)
+            Text(item).font(.callout).skinRows()
         }
+        .skinScreen()
         .navigationTitle("Disclaimers")
     }
 }
