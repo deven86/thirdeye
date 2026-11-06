@@ -116,7 +116,7 @@ struct SettingsView: View {
                     Label("Re-lock after", systemImage: "lock.rotation")
                 }
                 Toggle(isOn: $settings.hideLockScreenPnL) {
-                    Label("Hide P&L on Lock Screen", systemImage: "eye.slash")
+                    Label("Hide profit on Lock Screen & widgets", systemImage: "eye.slash")
                 }
                 Button {
                     lock.lock()
