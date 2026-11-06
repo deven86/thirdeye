@@ -92,26 +92,30 @@ struct TradeRow: View {
     var body: some View {
         let s = TradeMath.summary(trade, lastPrice: price)
         let signal = TradeMath.signal(trade, lastPrice: price)
+        // Line 1: name and result (the amount never wraps). Line 2: chips. Line 3: price, signal, days / R.
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(trade.instrument.fullSymbol).font(.body.weight(.semibold)).lineLimit(1)
-                Chip(text: trade.instrument.exchangeBadge, color: palette.textSecondary)
-                Text(trade.side.uppercased())
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(trade.isLong ? palette.up : palette.down)
-                Chip(text: trade.badge.title, color: palette.accent)
-                if trade.mode == .paper { Chip(text: "Paper", color: palette.neutral) }
-                Spacer()
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(trade.instrument.fullSymbol).font(.body.weight(.semibold))
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                Spacer(minLength: 4)
                 if trade.status == .open || trade.status == .closed, let total = trade.status == .closed ? s.realized : s.total {
                     Text(money(total, trade.instrument.currency, signed: true))
                         .font(.callout.weight(.semibold).monospacedDigit())
                         .foregroundStyle(total >= 0 ? palette.up : palette.down)
+                        .lineLimit(1).fixedSize()
+                        .layoutPriority(2)
                 }
             }
+            HStack(spacing: 5) {
+                Chip(text: trade.instrument.exchangeBadge, color: palette.textSecondary)
+                Chip(text: trade.side.uppercased(), color: trade.isLong ? palette.up : palette.down)
+                Chip(text: trade.badge.title, color: palette.accent)
+                if trade.mode == .paper { Chip(text: "Paper", color: palette.neutral) }
+            }
             HStack(spacing: 8) {
-                if let price { Text("Now \(plainPrice(price))").font(.caption.monospacedDigit()).foregroundStyle(palette.textSecondary) }
+                if let price { Text("Now \(plainPrice(price))").font(.caption.monospacedDigit()).foregroundStyle(palette.textSecondary).lineLimit(1) }
                 SignalLabel(signal: signal, trade: trade)
-                Spacer()
+                Spacer(minLength: 4)
                 if trade.status == .cancelled { Text("Cancelled").font(.caption).foregroundStyle(palette.textSecondary) }
                 else if trade.status != .closed {
                     let days = Calendar.current.dateComponents([.day], from: Date(), to: trade.completeBy).day ?? 0
@@ -143,14 +147,17 @@ struct SignalLabel: View {
 }
 
 struct Chip: View {
+    @Environment(\.skinActive) private var skinActive
     let text: String
     let color: Color
     var body: some View {
         Text(text)
             .font(.caption2.weight(.semibold))
+            .lineLimit(1).fixedSize()
             .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(color.opacity(0.14), in: Capsule())
-            .foregroundStyle(color)
+            // On a wallpaper a faint tint disappears: stronger fill, white-ish text.
+            .background(color.opacity(skinActive ? 0.32 : 0.14), in: Capsule())
+            .foregroundStyle(skinActive ? Color.white.opacity(0.95) : color)
     }
 }
 

@@ -90,6 +90,38 @@ struct SkinSnapshotTests {
         }
     }
 
+    private struct SampleTradeRows: View {
+        var body: some View {
+            let names: [(String, String, String, Double)] = [("TRENT", "NSE_EQ", "INR", 3029.3), ("GBP/USD", "FX", "USD", 1.2745), ("TAO/USDT", "SPOT", "USDT", 412.5)]
+            let trades: [Trade] = names.enumerated().map { i, n in
+                let inst = Instrument(id: "k\(i)", provider: i == 0 ? .upstox : .binance, symbol: n.0, name: n.0, exchange: i == 0 ? "NSE" : "Binance",
+                                      segment: n.1, kind: i == 0 ? .equity : .crypto, currency: n.2)
+                var t = Trade(instrument: inst, mode: i == 0 ? .real : .paper, side: i == 2 ? "short" : "long", status: .open,
+                              plannedEntryLow: n.3 * 0.998, plannedEntryHigh: n.3 * 1.002, stopLoss: n.3 * 0.95, initialStop: n.3 * 0.95,
+                              takeProfits: (1...3).map { TakeProfit(stage: $0, price: n.3 * (1 + 0.05 * Double($0)), rMultiple: Double($0), bookPercent: 30, then: "") },
+                              plannedQuantity: i == 0 ? 1 : 1000, badge: i == 1 ? .shortTerm : .swing, completeBy: Date().addingTimeInterval(29 * 86_400))
+                t.fills.append(Fill(kind: .entry, date: Date(), price: n.3, quantity: i == 0 ? 1 : 1000))
+                return t
+            }
+            return NavigationStack {
+                List { Group {
+                    Section { ForEach(trades) { t in TradeRow(trade: t, price: t.plannedEntryMid * 1.0164) } }
+                }.skinRows()
+                }
+                .skinScreen()
+                .navigationTitle("Trades")
+            }
+        }
+    }
+
+    @Test func tradeRowsOnPhotoLikeSkin() async {
+        let s = settings(.sunset)
+        s.colorBlindSafe = true
+        await emit("skin-traderows", ThemeHost { SampleTradeRows() }.environment(s))
+        s.skin = .none
+        await emit("plain-traderows", ThemeHost { SampleTradeRows() }.environment(s))
+    }
+
     @Test func skins() async {
         for (name, skin) in [("aurora", Skin.aurora), ("sunset", .sunset), ("classic", .classic)] {
             let s = settings(skin)

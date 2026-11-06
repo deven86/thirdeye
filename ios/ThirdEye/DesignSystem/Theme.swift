@@ -170,7 +170,16 @@ struct ThemeHost<Content: View>: View {
             ? (settings.theme == .highContrast ? AppTheme.highContrast : AppTheme.liquidGlass)
                 .palette(colorBlindSafe: settings.colorBlindSafe, systemScheme: .dark)
             : settings.theme.palette(colorBlindSafe: settings.colorBlindSafe, systemScheme: systemScheme)
-        if skin { palette.background = .clear }
+        if skin {
+            // Over a wallpaper the calm colours are too faint: brighter versions, same meaning.
+            palette.background = .clear
+            palette.up = Color(hex: settings.colorBlindSafe ? 0x7CC4FF : 0x5BD08F)
+            palette.down = Color(hex: settings.colorBlindSafe ? 0xFFB061 : 0xFF7B73)
+            palette.accent = Color(hex: 0x5FD3DC)
+            palette.warning = Color(hex: 0xFFB36B)
+            palette.neutral = Color(hex: 0xC9D0DA)
+            palette.textSecondary = Color.white.opacity(0.78)
+        }
         return content
             .environment(\.palette, palette)
             .environment(\.skinActive, skin)
