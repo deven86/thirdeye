@@ -36,7 +36,7 @@ type LiveState struct {
 	Progress        float64  `json:"progress"` // 0 = at the stop … 1 = at the next target
 	Status          string   `json:"status"`   // waiting · inZone · open · nearStop · stop · target
 	Note            string   `json:"note,omitempty"`
-	UpdatedAt       float64  `json:"updatedAt"` // Unix seconds
+	UpdatedAt       float64  `json:"updatedAt"`           // Unix seconds
 	StopPnl         *float64 `json:"stopPnl,omitempty"`   // whole-trade result if price reaches the stop
 	TargetPnl       *float64 `json:"targetPnl,omitempty"` // … and the next target
 }
