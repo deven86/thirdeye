@@ -105,12 +105,16 @@ nonisolated struct UpstoxPortfolioClient: Sendable {
         f.dateFormat = "yyyy-MM-dd"
         f.timeZone = Self.ist
         let start = f.string(from: now.addingTimeInterval(-Double(historyDays) * 86_400))
-        let end = f.string(from: now)
+        // History up to yesterday only: today's fills come from the endpoint above (Upstox lists them in both,
+        // with different IDs, which would add them twice).
+        let end = f.string(from: now.addingTimeInterval(-86_400))
         for segment in ["EQ", "FO"] {
             do {
                 let data = try await get("/v2/charges/historical-trades",
                                          query: ["segment": segment, "start_date": start, "end_date": end, "page_number": "1", "page_size": "500"])
-                for h in Self.parseHistory(data) where fills[h.id] == nil { fills[h.id] = h }
+                for h in Self.parseHistory(data) where fills[h.id] == nil && !fills.values.contains(where: { Self.sameFill($0, h) }) {
+                    fills[h.id] = h
+                }
             } catch {
                 warnings.append("Trade history (\(segment)): \(error.localizedDescription)")
             }
@@ -151,6 +155,14 @@ nonisolated struct UpstoxPortfolioClient: Sendable {
     private static func str(_ d: [String: Any], _ keys: String...) -> String? {
         for k in keys { if let s = d[k] as? String, !s.isEmpty { return s } }
         return nil
+    }
+
+    /// The same execution reported twice (today's list and trade history): same share, side, size, price and day.
+    static func sameFill(_ a: BrokerFill, _ b: BrokerFill) -> Bool {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = ist
+        return UpstoxReconciler.productKey(a.instrumentKey) == UpstoxReconciler.productKey(b.instrumentKey) && a.isBuy == b.isBuy
+            && abs(a.quantity - b.quantity) < 1e-9 && abs(a.price - b.price) < 0.01 && cal.isDate(a.date, inSameDayAs: b.date)
     }
 
     static func parseTimestamp(_ s: String?) -> Date? {
@@ -405,6 +417,52 @@ nonisolated enum UpstoxReconciler {
             if seen.insert(productKey(p.instrumentKey)).inserted { plan.untracked.append(p) }
         }
         return plan
+    }
+
+    /// Fills counted twice (a duplicate Upstox report, or an Upstox fill added next to the one you typed in), found
+    /// only where Third Eye holds more than Upstox. Returns (trade, fill) pairs to remove, never more than the excess.
+    /// Fills of positions you tracked from Upstox ("pos:…") are never touched.
+    static func duplicateFills(trades: [Trade], snapshot: BrokerSnapshot) -> [(trade: UUID, fill: UUID, brokerID: String?)] {
+        var brokerQty: [String: Double] = [:]
+        for p in snapshot.positions { brokerQty[productKey(p.instrumentKey), default: 0] += p.quantity }
+        let todayIDs = Set(snapshot.fills.map(\.id))
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = UpstoxPortfolioClient.ist
+        let open = trades.filter { $0.instrument.provider == .upstox && $0.status == .open }
+        var out: [(UUID, UUID, String?)] = []
+        for key in Set(open.map { productKey($0.instrument.id) }) {
+            let group = open.filter { productKey($0.instrument.id) == key }
+            let app = group.reduce(0.0) { $0 + ($1.isLong ? 1 : -1) * TradeMath.summary($1, lastPrice: nil).openQuantity }
+            let b = brokerQty[key] ?? 0
+            guard app * b >= 0 || b == 0 else { continue }   // opposite directions: leave it to you
+            var excess = abs(app) - abs(b)
+            guard excess > 1e-9 else { continue }
+            for t in group.sorted(by: { $0.createdAt < $1.createdAt }) {
+                let isUpstox: (Fill) -> Bool = { $0.brokerID?.hasPrefix("upstox:") == true }
+                var removed = Set<UUID>()
+                // 1) Two fills of the same kind, size, price and day where at least one came from Upstox.
+                for f in t.fills where excess > 1e-9 && !removed.contains(f.id) {
+                    let twins = t.fills.filter { $0.id != f.id && !removed.contains($0.id) && $0.kind == f.kind
+                        && abs($0.quantity - f.quantity) < 1e-9 && abs($0.price - f.price) < 0.01 && cal.isDate($0.date, inSameDayAs: f.date) }
+                    guard !twins.isEmpty, isUpstox(f) || twins.contains(where: isUpstox) else { continue }
+                    // Drop the one Upstox no longer reports (the history duplicate); keep the other.
+                    let all = [f] + twins
+                    guard let drop = all.first(where: { isUpstox($0) && !todayIDs.contains($0.brokerID!) }) ?? all.last(where: isUpstox),
+                          drop.kind == .entry else { continue }
+                    removed.insert(drop.id); excess -= drop.quantity
+                    out.append((t.id, drop.id, drop.brokerID))
+                }
+                // 2) A typed-in entry next to an Upstox entry of the same size (added before fills were linked):
+                //    the Upstox one has the real price, so the typed one goes.
+                for f in t.fills where excess > 1e-9 && f.kind == .entry && f.brokerID == nil && !removed.contains(f.id) {
+                    if t.fills.contains(where: { isUpstox($0) && $0.kind == .entry && !removed.contains($0.id) && abs($0.quantity - f.quantity) < 1e-9 }) {
+                        removed.insert(f.id); excess -= f.quantity
+                        out.append((t.id, f.id, nil))
+                    }
+                }
+            }
+        }
+        return out
     }
 
     static func fmtQty(_ q: Double) -> String { q.formatted(.number.precision(.fractionLength(0...4))) }

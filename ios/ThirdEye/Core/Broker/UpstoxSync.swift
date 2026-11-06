@@ -8,6 +8,7 @@ final class UpstoxSync {
     private(set) var plan: UpstoxReconciler.Plan?
     private(set) var lastSync: Date?
     private(set) var lastAdded: [UpstoxReconciler.Match] = []
+    private(set) var removedDuplicates = 0
     private(set) var warnings: [String] = []
     private(set) var error: String?
     private(set) var running = false
@@ -42,6 +43,16 @@ final class UpstoxSync {
             warnings = snap.warnings
             error = nil
             lastSync = Date()
+            // Clean up fills counted twice, and never bring those Upstox reports back.
+            let dups = UpstoxReconciler.duplicateFills(trades: trades.trades, snapshot: snap)
+            for d in dups {
+                if let t = trades.trade(id: d.trade) { trades.deleteFill(t, id: d.fill) }
+                if let id = d.brokerID { ignored.insert(id) }
+            }
+            if !dups.isEmpty {
+                removedDuplicates += dups.count
+                UserDefaults.standard.set(Array(ignored), forKey: Self.ignoredKey)
+            }
             var p = UpstoxReconciler.plan(trades: trades.trades, snapshot: snap, ignored: ignored)
             if settings.autoImportUpstox, !p.matches.isEmpty {
                 let matches = p.matches

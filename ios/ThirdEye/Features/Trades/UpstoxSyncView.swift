@@ -34,6 +34,10 @@ struct UpstoxSyncView: View {
                 }
                 .disabled(sync.running)
                 Toggle("Add matching fills automatically", isOn: $settings.autoImportUpstox)
+                if sync.removedDuplicates > 0 {
+                    Label("Removed \(sync.removedDuplicates) fill\(sync.removedDuplicates == 1 ? "" : "s") that were counted twice", systemImage: "wand.and.stars")
+                        .font(.caption).foregroundStyle(palette.accent)
+                }
                 if let e = sync.error { Text(e).font(.caption).foregroundStyle(palette.warning) }
                 ForEach(sync.warnings, id: \.self) { Text($0).font(.caption2).foregroundStyle(palette.textSecondary) }
             } footer: {

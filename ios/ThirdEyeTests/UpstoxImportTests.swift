@@ -153,6 +153,31 @@ struct UpstoxReconcilerTests {
         #expect(UpstoxReconciler.productKey("NSE_FO|12345") == "NSE_FO|12345")
     }
 
+    @Test func fillCountedTwiceIsFoundOnlyUpToTheExcess() {
+        var t = trade(qty: 1)
+        t.fills[0].price = 3029.3; t.fills[0].date = t0; t.fills[0].brokerID = "upstox:A"
+        t.fills.append(Fill(kind: .entry, date: t0.addingTimeInterval(60), price: 3029.3, quantity: 1, brokerID: "upstox:B"))
+        let snap = BrokerSnapshot(fills: [fill("A", buy: true, qty: 1, price: 3029.3)], positions: [position(1)], stops: [], warnings: [])
+        let d = UpstoxReconciler.duplicateFills(trades: [t], snapshot: snap)
+        #expect(d.count == 1 && d[0].brokerID == "upstox:B")
+        // Nothing to remove when Upstox holds the same amount.
+        #expect(UpstoxReconciler.duplicateFills(trades: [t], snapshot: BrokerSnapshot(fills: [], positions: [position(2)], stops: [], warnings: [])).isEmpty)
+    }
+
+    @Test func typedEntryNextToUpstoxEntryIsRemoved() {
+        var t = trade(qty: 2)   // typed at 3055
+        t.fills.append(Fill(kind: .entry, date: t0, price: 3029.3, quantity: 2, brokerID: "upstox:C"))
+        let d = UpstoxReconciler.duplicateFills(trades: [t], snapshot: BrokerSnapshot(fills: [], positions: [position(2)], stops: [], warnings: []))
+        #expect(d.count == 1 && d[0].fill == t.fills[0].id)
+    }
+
+    @Test func historyCopyOfTodaysFillIsTheSameFill() {
+        let a = fill("1", buy: true, qty: 2, price: 1336.6)
+        var b = fill("X9", buy: true, qty: 2, price: 1336.6)
+        b.instrumentKey = "BSE_EQ|INE849A01020"
+        #expect(UpstoxPortfolioClient.sameFill(a, b))
+    }
+
     @Test func placeholderTradeForUntrackedPosition() {
         let t = UpstoxReconciler.trade(for: position(-4), instrument: trent, now: t0)
         #expect(!t.isLong && t.stopLoss > 3055 && t.status == .open)
