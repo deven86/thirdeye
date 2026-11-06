@@ -61,7 +61,7 @@ struct WidgetSnapshotTests {
                                         initialStop: 2940)
         let s = TradeActivityAttributes.ContentState(price: 3098.5, r: 0.38, pnlPercent: 1.42, pnl: 435, stop: 2940, nextTarget: 3135,
                                                      nextTargetStage: 1, progress: 0.8, status: "open", note: nil,
-                                                     updatedAt: Date().timeIntervalSince1970)
+                                                     updatedAt: Date().timeIntervalSince1970, stopPnl: -1150, targetPnl: 800)
         let card = LockScreenTradeView(attributes: a, state: s, stale: false)
             .frame(width: 361)
             .fixedSize(horizontal: false, vertical: true)
