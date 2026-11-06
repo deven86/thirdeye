@@ -36,11 +36,24 @@ nonisolated struct BrokerStop: Hashable, Sendable {
     var kind: String            // SL order / GTT
 }
 
+/// A buy/sell order waiting at Upstox (placed, scheduled for the next session, or open) — not a stop-loss.
+nonisolated struct BrokerOrder: Hashable, Sendable, Identifiable {
+    var id: String
+    var instrumentKey: String
+    var symbol: String
+    var exchange: String
+    var isBuy: Bool
+    var quantity: Double        // still to fill
+    var price: Double?          // nil = market
+    var status: String          // "scheduled" (after-market order) / "open" …
+}
+
 nonisolated struct BrokerSnapshot: Sendable {
     var fills: [BrokerFill]
     var positions: [BrokerPosition]
     var stops: [BrokerStop]
     var warnings: [String]
+    var orders: [BrokerOrder] = []
 }
 
 nonisolated enum UpstoxPortfolioError: LocalizedError {
@@ -108,11 +121,15 @@ nonisolated struct UpstoxPortfolioClient: Sendable {
         do { positions += Self.parseHoldings(try await get("/v2/portfolio/long-term-holdings")) }
         catch { warnings.append("Holdings: \(error.localizedDescription)") }
         var stops: [BrokerStop] = []
-        do { stops += Self.parseStopOrders(try await get("/v2/order/retrieve-all")) }
-        catch { warnings.append("Orders: \(error.localizedDescription)") }
+        var orders: [BrokerOrder] = []
+        do {
+            let all = try await get("/v2/order/retrieve-all")
+            stops += Self.parseStopOrders(all)
+            orders = Self.parsePendingOrders(all)
+        } catch { warnings.append("Orders: \(error.localizedDescription)") }
         do { stops += Self.parseGTT(try await get("/v3/order/gtt")) }
         catch { warnings.append("GTT orders: \(error.localizedDescription)") }
-        return BrokerSnapshot(fills: fills.values.sorted { $0.date < $1.date }, positions: positions, stops: stops, warnings: warnings)
+        return BrokerSnapshot(fills: fills.values.sorted { $0.date < $1.date }, positions: positions, stops: stops, warnings: warnings, orders: orders)
     }
 
     // MARK: Parsing (tolerant: Upstox uses both trading_symbol and tradingsymbol)
@@ -205,6 +222,25 @@ nonisolated struct UpstoxPortfolioClient: Sendable {
         }
     }
 
+    /// Buy/sell orders still waiting to fill (including after-market orders scheduled for the next session).
+    static func parsePendingOrders(_ data: Any) -> [BrokerOrder] {
+        rows(data).compactMap { r in
+            let type = (str(r, "order_type") ?? "").uppercased()
+            let status = (str(r, "status") ?? "").lowercased()
+            let waiting = ["open", "open pending", "validation pending", "put order req received", "after market order req received",
+                           "modify pending", "modified", "not modified", "pending"]
+            guard !type.hasPrefix("SL"), waiting.contains(status), let key = str(r, "instrument_token", "instrument_key") else { return nil }
+            let q = num(r["pending_quantity"]) ?? num(r["quantity"]) ?? 0
+            guard q > 0 else { return nil }
+            let price = num(r["price"]).flatMap { $0 > 0 ? $0 : nil }
+            return BrokerOrder(id: str(r, "order_id") ?? UUID().uuidString, instrumentKey: key,
+                               symbol: str(r, "trading_symbol", "tradingsymbol") ?? key, exchange: str(r, "exchange") ?? "",
+                               isBuy: (str(r, "transaction_type") ?? "").uppercased() == "BUY", quantity: q,
+                               price: type == "MARKET" ? nil : price,
+                               status: status.contains("after market") || (r["is_amo"] as? Bool) == true ? "scheduled" : "open")
+        }
+    }
+
     /// Active GTT orders with a STOPLOSS leg.
     static func parseGTT(_ data: Any) -> [BrokerStop] {
         rows(data).compactMap { r in
@@ -228,6 +264,9 @@ nonisolated enum UpstoxReconciler {
         var tradeID: UUID
         var isEntry: Bool
         var takeProfitStage: Int?
+        /// A fill you typed in yourself that this Upstox fill is (same side and size): it gets Upstox's real
+        /// price and time instead of a second fill being added.
+        var replacesFill: UUID? = nil
     }
 
     nonisolated struct Mismatch: Hashable, Sendable, Identifiable {
@@ -236,6 +275,8 @@ nonisolated enum UpstoxReconciler {
         var name: String
         var appQuantity: Double
         var brokerQuantity: Double
+        var waitingQuantity: Double = 0    // signed, in orders still to fill
+        var orderNote: String? = nil       // "Market buy 1 · scheduled for next session · BSE"
     }
 
     nonisolated struct StopCheck: Hashable, Sendable, Identifiable {
@@ -252,7 +293,16 @@ nonisolated enum UpstoxReconciler {
         var unmatchedFills: [BrokerFill] = []
         var untracked: [BrokerPosition] = []
         var mismatches: [Mismatch] = []
+        var waiting: [Mismatch] = []       // the gap is an order at Upstox that hasn't filled yet
         var stops: [StopCheck] = []
+    }
+
+    /// Same share on NSE and BSE: Upstox keys are "NSE_EQ|<ISIN>" / "BSE_EQ|<ISIN>", so cash-market products
+    /// are compared by ISIN. Everything else (F&O, MCX) must match exactly.
+    static func productKey(_ key: String) -> String {
+        let parts = key.split(separator: "|", maxSplits: 1).map(String.init)
+        guard parts.count == 2, parts[0].hasSuffix("_EQ"), parts[1].count == 12, parts[1].hasPrefix("IN") else { return key }
+        return "ISIN:" + parts[1]
     }
 
     static func importedIDs(_ trades: [Trade]) -> Set<String> {
@@ -267,8 +317,27 @@ nonisolated enum UpstoxReconciler {
         let indian = trades.filter { $0.instrument.provider == .upstox }
 
         for f in snapshot.fills where !done.contains(f.id) {
+            let product = productKey(f.instrumentKey)
+            // First: a fill you already recorded yourself (same trade side → entry or exit, same size, within 10 days).
+            let linkable = indian.compactMap { working[$0.id] }.filter { productKey($0.instrument.id) == product }
+                .sorted { $0.createdAt > $1.createdAt }
+            var linked = false
+            for t in linkable {
+                let kind: Fill.Kind = t.isLong == f.isBuy ? .entry : .exit
+                if let i = t.fills.firstIndex(where: { $0.kind == kind && $0.brokerID == nil && abs($0.quantity - f.quantity) < 1e-9
+                    && abs($0.date.timeIntervalSince(f.date)) < 10 * 86_400 }) {
+                    plan.matches.append(Match(fill: f, tradeID: t.id, isEntry: kind == .entry, takeProfitStage: t.fills[i].takeProfitStage,
+                                              replacesFill: t.fills[i].id))
+                    var u = t
+                    u.fills[i].brokerID = f.id
+                    working[t.id] = u
+                    linked = true
+                    break
+                }
+            }
+            if linked { continue }
             let candidates = indian.compactMap { working[$0.id] }
-                .filter { $0.instrument.id == f.instrumentKey && ($0.status == .open || $0.status == .upcoming) }
+                .filter { productKey($0.instrument.id) == product && ($0.status == .open || $0.status == .upcoming) }
                 .sorted { $0.createdAt > $1.createdAt }
             // An entry adds to a trade on the fill's side; an exit reduces an open one on the other side.
             let entryTrade = candidates.first { ($0.isLong == f.isBuy) && ($0.status == .upcoming || $0.status == .open) }
@@ -295,31 +364,47 @@ nonisolated enum UpstoxReconciler {
 
         // Positions after the matches: compare quantities, find positions Third Eye doesn't track.
         var brokerQty: [String: Double] = [:]
-        for p in snapshot.positions { brokerQty[p.instrumentKey, default: 0] += p.quantity }
+        for p in snapshot.positions { brokerQty[productKey(p.instrumentKey), default: 0] += p.quantity }
+        var pending: [String: Double] = [:]
+        var orderNotes: [String: [String]] = [:]
+        for o in snapshot.orders {
+            let k = productKey(o.instrumentKey)
+            pending[k, default: 0] += o.isBuy ? o.quantity : -o.quantity
+            let how = o.price.map { "Limit \(o.isBuy ? "buy" : "sell") \(fmtQty(o.quantity)) @ \($0.formatted(.number.precision(.fractionLength(0...2))))" }
+                ?? "Market \(o.isBuy ? "buy" : "sell") \(fmtQty(o.quantity))"
+            orderNotes[k, default: []].append("\(how) · \(o.status == "scheduled" ? "scheduled for the next session" : "open") · \(o.exchange)")
+        }
         let openAfter = working.values.filter { $0.instrument.provider == .upstox && $0.status == .open }
         var appQty: [String: Double] = [:]
         for t in openAfter {
             let q = TradeMath.summary(t, lastPrice: nil).openQuantity
-            appQty[t.instrument.id, default: 0] += t.isLong ? q : -q
+            appQty[productKey(t.instrument.id), default: 0] += t.isLong ? q : -q
         }
         for t in openAfter.sorted(by: { $0.createdAt < $1.createdAt }) {
-            let key = t.instrument.id
-            let b = brokerQty[key] ?? 0, a = appQty[key] ?? 0
-            if abs(b - a) > 1e-6, !plan.mismatches.contains(where: { $0.name == t.instrument.alertName }) {
-                plan.mismatches.append(Mismatch(tradeID: t.id, name: t.instrument.alertName, appQuantity: a, brokerQuantity: b))
+            let key = productKey(t.instrument.id)
+            let b = brokerQty[key] ?? 0, a = appQty[key] ?? 0, w = pending[key] ?? 0
+            let listed = plan.mismatches.contains { $0.name == t.instrument.alertName } || plan.waiting.contains { $0.name == t.instrument.alertName }
+            if abs(b - a) > 1e-6, !listed {
+                var m = Mismatch(tradeID: t.id, name: t.instrument.alertName, appQuantity: a, brokerQuantity: b, waitingQuantity: w,
+                                 orderNote: orderNotes[key]?.joined(separator: "\n"))
+                if w != 0, abs(b + w - a) < 1e-6 { plan.waiting.append(m) } else { m.waitingQuantity = w; plan.mismatches.append(m) }
             }
-            let protective = snapshot.stops.filter { $0.instrumentKey == key && $0.isBuy != t.isLong }
+            // Nothing held at Upstox yet (order not filled): a stop-loss order can't be placed, so don't nag.
+            if abs(b) < 1e-9 { continue }
+            let protective = snapshot.stops.filter { productKey($0.instrumentKey) == key && $0.isBuy != t.isLong }
             let nearest = protective.min { abs($0.trigger - t.stopLoss) < abs($1.trigger - t.stopLoss) }
             plan.stops.append(StopCheck(tradeID: t.id, name: t.instrument.alertName, appStop: t.stopLoss,
                                         brokerStop: nearest?.trigger, kind: nearest?.kind))
         }
-        let tracked = Set(working.values.filter { $0.status == .open || $0.status == .upcoming }.map(\.instrument.id))
+        let tracked = Set(working.values.filter { $0.status == .open || $0.status == .upcoming }.map { productKey($0.instrument.id) })
         var seen = Set<String>()
-        for p in snapshot.positions where !tracked.contains(p.instrumentKey) && !ignored.contains("pos:\(p.instrumentKey)") {
-            if seen.insert(p.instrumentKey).inserted { plan.untracked.append(p) }
+        for p in snapshot.positions where !tracked.contains(productKey(p.instrumentKey)) && !ignored.contains("pos:\(p.instrumentKey)") {
+            if seen.insert(productKey(p.instrumentKey)).inserted { plan.untracked.append(p) }
         }
         return plan
     }
+
+    static func fmtQty(_ q: Double) -> String { q.formatted(.number.precision(.fractionLength(0...4))) }
 
     /// An exit within 0.3 % of a not-yet-booked target counts as that target.
     static func guessStage(_ t: Trade, price: Double) -> Int? {

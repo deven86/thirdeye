@@ -86,6 +86,16 @@ final class TradeStore {
         var added = 0
         for m in matches {
             guard var t = trade(id: m.tradeID), !t.fills.contains(where: { $0.brokerID == m.fill.id }) else { continue }
+            if let r = m.replacesFill, let i = t.fills.firstIndex(where: { $0.id == r }) {
+                // The fill you typed in is this Upstox fill: take the real price and time, don't add another.
+                t.fills[i].price = m.fill.price
+                t.fills[i].date = m.fill.date
+                t.fills[i].brokerID = m.fill.id
+                Self.settleStatus(&t)
+                save(t)
+                added += 1
+                continue
+            }
             t.fills.append(Fill(kind: m.isEntry ? .entry : .exit, date: m.fill.date, price: m.fill.price, quantity: m.fill.quantity,
                                 takeProfitStage: m.takeProfitStage, note: m.isEntry ? nil : "From Upstox", brokerID: m.fill.id))
             if !m.isEntry, m.takeProfitStage == 1, let avg = TradeMath.summary(t, lastPrice: nil).averageEntry {

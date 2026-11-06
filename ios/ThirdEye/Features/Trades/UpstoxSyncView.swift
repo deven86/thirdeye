@@ -42,14 +42,14 @@ struct UpstoxSyncView: View {
 
             if !sync.lastAdded.isEmpty {
                 Section("Added from Upstox") {
-                    ForEach(sync.lastAdded) { m in fillRow(m.fill, detail: "\(m.isEntry ? "Entry" : m.takeProfitStage.map { "Exit · TP\($0)" } ?? "Exit") → \(name(m.tradeID))") }
+                    ForEach(sync.lastAdded) { m in fillRow(m.fill, detail: "\(m.replacesFill != nil ? "Linked to your recorded " : "")\(m.isEntry ? "Entry" : m.takeProfitStage.map { "Exit · TP\($0)" } ?? "Exit") → \(name(m.tradeID))") }
                 }
             }
 
             if let plan = sync.plan {
                 if !plan.matches.isEmpty {
                     Section {
-                        ForEach(plan.matches) { m in fillRow(m.fill, detail: "\(m.isEntry ? "Entry" : "Exit") → \(name(m.tradeID))") }
+                        ForEach(plan.matches) { m in fillRow(m.fill, detail: "\(m.replacesFill != nil ? "Same as your recorded " : "")\(m.isEntry ? "entry" : "exit") → \(name(m.tradeID))") }
                         Button("Add these \(plan.matches.count) fills") { sync.addMatches(trades: trades) }
                     } header: { Text("Ready to add") }
                 }
@@ -93,14 +93,33 @@ struct UpstoxSyncView: View {
                     }
                 }
 
+                if !plan.waiting.isEmpty {
+                    Section {
+                        ForEach(plan.waiting) { m in
+                            VStack(alignment: .leading, spacing: 3) {
+                                Label(m.name, systemImage: "clock").font(.callout.weight(.semibold))
+                                ForEach((m.orderNote ?? "").split(separator: "\n").map(String.init), id: \.self) {
+                                    Text($0).font(.caption).foregroundStyle(palette.textSecondary)
+                                }
+                                Text("Third Eye \(qty(m.appQuantity)) · held at Upstox \(qty(m.brokerQuantity)) · waiting \(qty(abs(m.waitingQuantity)))")
+                                    .font(.caption.monospacedDigit()).foregroundStyle(palette.accent)
+                            }
+                        }
+                    } header: {
+                        Text("Orders waiting at Upstox")
+                    } footer: {
+                        Text("Nothing to fix. When the order fills, Third Eye takes Upstox's real price and time for the entry you recorded (it doesn't add a second one). Place the stop-loss at Upstox once it has filled.")
+                    }
+                }
+
                 if !plan.mismatches.isEmpty {
                     Section {
                         ForEach(plan.mismatches) { m in
                             Button { openTrade = m.tradeID } label: {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(m.name).font(.callout.weight(.semibold)).foregroundStyle(palette.textPrimary)
-                                    Text("Third Eye \(qty(m.appQuantity)) · Upstox \(qty(m.brokerQuantity))").font(.caption.monospacedDigit())
-                                        .foregroundStyle(palette.warning)
+                                    Text("Third Eye \(qty(m.appQuantity)) · Upstox \(qty(m.brokerQuantity))\(m.waitingQuantity != 0 ? " · \(qty(abs(m.waitingQuantity))) in open orders" : "")")
+                                        .font(.caption.monospacedDigit()).foregroundStyle(palette.warning)
                                 }
                             }
                         }
@@ -137,7 +156,7 @@ struct UpstoxSyncView: View {
                     }
                 }
 
-                if plan.matches.isEmpty && plan.untracked.isEmpty && plan.unmatchedFills.isEmpty && plan.mismatches.isEmpty {
+                if plan.matches.isEmpty && plan.untracked.isEmpty && plan.unmatchedFills.isEmpty && plan.mismatches.isEmpty && plan.waiting.isEmpty {
                     Section { Label("Third Eye matches your Upstox account.", systemImage: "checkmark.seal").foregroundStyle(palette.up) }
                 }
             }

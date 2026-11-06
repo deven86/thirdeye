@@ -63,6 +63,11 @@ struct UpstoxParserTests {
         #expect(s.count == 1 && s[0].trigger == 2945 && !s[0].isBuy)
         let gtt: [String: Any] = ["data": [["status": "active", "instrument_token": trentKey, "transaction_type": "SELL", "quantity": 10,
                                            "rules": [["strategy": "ENTRY", "trigger_price": 3000], ["strategy": "STOPLOSS", "trigger_price": 2940]]]]]
+        let amo: [String: Any] = ["data": [["order_id": "1", "order_type": "MARKET", "status": "after market order req received",
+                                           "instrument_token": "BSE_EQ|INE019A01038", "trading_symbol": "JSWSTEEL", "exchange": "BSE",
+                                           "transaction_type": "BUY", "quantity": 2, "pending_quantity": 2, "price": 0]]]
+        let o = UpstoxPortfolioClient.parsePendingOrders(amo)
+        #expect(o.count == 1 && o[0].status == "scheduled" && o[0].price == nil && o[0].quantity == 2)
         let g = UpstoxPortfolioClient.parseGTT(gtt)
         #expect(g.count == 1 && g[0].trigger == 2940 && g[0].kind == "GTT")
     }
@@ -113,6 +118,35 @@ struct UpstoxReconcilerTests {
         let plan = UpstoxReconciler.plan(trades: trades, snapshot: snap)
         trades[0].fills.append(Fill(kind: .entry, date: t0, price: 3050, quantity: 10, brokerID: plan.matches[0].fill.id))
         #expect(UpstoxReconciler.plan(trades: trades, snapshot: snap).matches.isEmpty)
+    }
+
+    @Test func fillYouAlreadyRecordedIsLinkedNotAdded() {
+        let t = trade(qty: 1)   // you typed the entry before the order filled
+        let snap = BrokerSnapshot(fills: [fill("7", buy: true, qty: 1, price: 3071.5)], positions: [position(1)], stops: [], warnings: [])
+        let plan = UpstoxReconciler.plan(trades: [t], snapshot: snap)
+        #expect(plan.matches.count == 1)
+        #expect(plan.matches[0].replacesFill == t.fills[0].id)
+        #expect(plan.mismatches.isEmpty)
+    }
+
+    @Test func scheduledOrderExplainsTheGapAndNoStopNag() {
+        let t = trade(qty: 1)
+        let order = BrokerOrder(id: "o1", instrumentKey: trentKey, symbol: "TRENT", exchange: "NSE", isBuy: true, quantity: 1,
+                                price: nil, status: "scheduled")
+        let snap = BrokerSnapshot(fills: [], positions: [], stops: [], warnings: [], orders: [order])
+        let plan = UpstoxReconciler.plan(trades: [t], snapshot: snap)
+        #expect(plan.mismatches.isEmpty)
+        #expect(plan.waiting.count == 1 && plan.waiting[0].waitingQuantity == 1)
+        #expect(plan.stops.isEmpty)
+    }
+
+    @Test func bseFillMatchesAnNSETradeBySameISIN() {
+        let t = trade(open: false)
+        var f = fill("8", buy: true, qty: 10, price: 3050)
+        f.instrumentKey = "BSE_EQ|INE849A01020"
+        let snap = BrokerSnapshot(fills: [f], positions: [], stops: [], warnings: [])
+        #expect(UpstoxReconciler.plan(trades: [t], snapshot: snap).matches.first?.isEntry == true)
+        #expect(UpstoxReconciler.productKey("NSE_FO|12345") == "NSE_FO|12345")
     }
 
     @Test func placeholderTradeForUntrackedPosition() {

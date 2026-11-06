@@ -45,7 +45,7 @@ final class UpstoxSync {
             var p = UpstoxReconciler.plan(trades: trades.trades, snapshot: snap, ignored: ignored)
             if settings.autoImportUpstox, !p.matches.isEmpty {
                 let matches = p.matches
-                if trades.applyBrokerMatches(matches) > 0 { lastAdded = matches }
+                if trades.applyBrokerMatches(matches) > 0 { lastAdded = matches + lastAdded.filter { a in !matches.contains { $0.id == a.id } } }
                 p = UpstoxReconciler.plan(trades: trades.trades, snapshot: snap, ignored: ignored)
             }
             plan = p
