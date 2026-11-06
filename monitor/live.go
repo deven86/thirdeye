@@ -37,6 +37,8 @@ type LiveState struct {
 	Status          string   `json:"status"`   // waiting · inZone · open · nearStop · stop · target
 	Note            string   `json:"note,omitempty"`
 	UpdatedAt       float64  `json:"updatedAt"` // Unix seconds
+	StopPnl         *float64 `json:"stopPnl,omitempty"`   // whole-trade result if price reaches the stop
+	TargetPnl       *float64 `json:"targetPnl,omitempty"` // … and the next target
 }
 
 // BuildLiveState turns a fresh price into the activity's content.
@@ -89,6 +91,11 @@ func BuildLiveState(t WatchTrade, price float64, now time.Time) LiveState {
 		}
 		pnl := t.Realized + dir*(price-entry)*t.OpenQuantity*size
 		s.Pnl = &pnl
+		at := func(level float64) *float64 { v := t.Realized + dir*(level-entry)*t.OpenQuantity*size; return &v }
+		s.StopPnl = at(t.Stop)
+		if next != nil {
+			s.TargetPnl = at(*next.Price)
+		}
 	}
 	if next != nil {
 		span := dir * (*next.Price - t.Stop)

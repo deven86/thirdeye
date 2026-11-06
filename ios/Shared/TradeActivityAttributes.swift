@@ -16,6 +16,8 @@ nonisolated struct TradeActivityAttributes: ActivityAttributes, Sendable {
         var status: String          // waiting · inZone · open · nearStop · stop · target
         var note: String?
         var updatedAt: Double       // Unix seconds
+        var stopPnl: Double? = nil      // whole-trade result if price reaches the stop
+        var targetPnl: Double? = nil    // … and the next target
 
         var updated: Date { Date(timeIntervalSince1970: updatedAt) }
     }

@@ -121,17 +121,20 @@ struct TradesWidgetView: View {
 
     private func list(height: CGFloat) -> some View {
         // A row with the bar needs 56 pt; without it 44 pt. Use the bar only when at least two rows still fit.
+        // With the stop / target row (and the result at each) a row needs 86 pt: used when every trade fits, or 3+ do.
         let room = height - headerHeight - gap
+        let withLevels = Int((room + gap) / (86 + gap))
+        let showLevels = withLevels >= min(max(entry.trades.count, 1), 3)
         let withBar = Int((room + gap) / (56 + gap))
-        let showBar = withBar >= 2
-        let rowHeight: CGFloat = showBar ? 56 : 44
+        let showBar = showLevels || withBar >= 2
+        let rowHeight: CGFloat = showLevels ? 86 : showBar ? 56 : 44
         let fit = max(1, Int((room + gap) / (rowHeight + gap)))
         let shown = Array(entry.trades.prefix(fit))
         return VStack(alignment: .leading, spacing: gap) {
             header(more: entry.trades.count - shown.count)
             ForEach(shown) { t in
                 Link(destination: URL(string: "thirdeye://trade/\(t.id)")!) {
-                    TradeBox(model: TradeBoxModel(t, hideMoney: entry.hideMoney), showBar: showBar)
+                    TradeBox(model: TradeBoxModel(t, hideMoney: entry.hideMoney), showBar: showBar, showLevels: showLevels)
                         .padding(.horizontal, 10)
                         .frame(maxWidth: .infinity, minHeight: rowHeight, maxHeight: rowHeight, alignment: .leading)
                         .background(card)

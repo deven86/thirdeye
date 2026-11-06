@@ -31,6 +31,12 @@ struct TradeDetailView: View {
         }
     }
 
+    /// "−₹89.30 at the stop" / "+₹151.47" under a level.
+    private func levelMoney(_ v: Double, _ currency: String) -> some View {
+        Text(money(v, currency, signed: true)).font(.caption.weight(.semibold).monospacedDigit())
+            .foregroundStyle(v >= 0 ? palette.up : palette.down)
+    }
+
     private func content(_ t: Trade) -> some View {
         let price = prices.price(t.instrument)
         let s = TradeMath.summary(t, lastPrice: price)
@@ -85,9 +91,21 @@ struct TradeDetailView: View {
                 }
             }
 
-            Section("Plan") {
+            Section {
                 LabeledContent("Entry zone", value: "\(plainPrice(t.plannedEntryLow)) – \(plainPrice(t.plannedEntryHigh))")
-                LabeledContent("Stop-loss", value: plainPrice(t.stopLoss) + (t.stopLoss != t.initialStop ? " (moved from \(plainPrice(t.initialStop)))" : ""))
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Stop-loss")
+                        if t.stopLoss != t.initialStop {
+                            Text("moved from \(plainPrice(t.initialStop))").font(.caption2).foregroundStyle(palette.textSecondary)
+                        }
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text(plainPrice(t.stopLoss)).monospacedDigit()
+                        levelMoney(t.pnl(ifPriceAt: t.stopLoss), cur)
+                    }
+                }
                 let booked = Set(t.fills.compactMap(\.takeProfitStage))
                 ForEach(t.takeProfits, id: \.stage) { tp in
                     HStack {
@@ -95,12 +113,19 @@ struct TradeDetailView: View {
                             .foregroundStyle(booked.contains(tp.stage) ? palette.up : palette.neutral)
                         Text("TP\(tp.stage) · book \(Int(tp.bookPercent))%")
                         Spacer()
-                        Text(tp.price.map(plainPrice) ?? "Trailing").monospacedDigit()
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text(tp.price.map(plainPrice) ?? "Trailing").monospacedDigit()
+                            if let p = tp.price, !booked.contains(tp.stage) { levelMoney(t.pnl(ifPriceAt: p), cur) }
+                        }
                     }
                 }
                 LabeledContent(t.instrument.contractSize > 1 ? "Planned lots" : "Planned quantity",
                                value: t.plannedQuantity.formatted() + (t.instrument.contractSize > 1 ? " (\((t.plannedQuantity * t.instrument.contractSize).formatted()) units)" : ""))
                 Button { editPlan = true } label: { Label("Edit plan", systemImage: "pencil") }
+            } header: {
+                Text("Plan")
+            } footer: {
+                Text("The amount under each level is your result on the whole trade if price gets there: what you have already booked plus the shares still open\(t.status == .upcoming ? " (the planned quantity, from the middle of the entry zone)" : ""), after the fees recorded so far.")
             }
 
             if t.status == .open {

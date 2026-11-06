@@ -46,6 +46,8 @@ final class LiveActivityManager {
         var st = TradeActivityAttributes.ContentState(price: price, r: nil, pnlPercent: nil, stop: t.stopLoss,
                                                       nextTarget: next?.price, nextTargetStage: next?.stage, progress: 0,
                                                       status: "open", note: nil, updatedAt: now.timeIntervalSince1970)
+        st.stopPnl = t.pnl(ifPriceAt: t.stopLoss)
+        st.targetPnl = next?.price.map { t.pnl(ifPriceAt: $0) }
         if t.status == .upcoming {
             if price >= t.plannedEntryLow && price <= t.plannedEntryHigh {
                 st.status = "inZone"; st.note = "In the entry zone"

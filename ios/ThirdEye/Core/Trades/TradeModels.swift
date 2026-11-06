@@ -183,3 +183,15 @@ nonisolated enum TradeMath {
         return out
     }
 }
+
+extension Trade {
+    /// Money on the whole trade if price reached `level`: what is already booked plus the open quantity at that
+    /// price (before entry: the planned quantity from the middle of the entry zone). After fees already paid.
+    nonisolated func pnl(ifPriceAt level: Double) -> Double {
+        let s = TradeMath.summary(self, lastPrice: nil)
+        let dir: Double = isLong ? 1 : -1
+        let size = instrument.contractSize
+        if s.entryQuantity <= 0 { return dir * (level - plannedEntryMid) * plannedQuantity * size }
+        return s.realized + dir * (level - (s.averageEntry ?? plannedEntryMid)) * s.openQuantity * size
+    }
+}

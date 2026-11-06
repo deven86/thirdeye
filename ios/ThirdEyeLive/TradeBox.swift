@@ -51,6 +51,8 @@ struct TradeBoxModel {
     var stop: String
     var entry: String
     var target: String?
+    var stopMoney: String? = nil     // result if price reaches the stop
+    var targetMoney: String? = nil   // … the next target
 
     static func tone(_ state: String, pnl: Double?) -> Tone {
         switch state {
@@ -90,6 +92,10 @@ struct TradeBoxModel {
                   money: hideMoney ? nil : pnl.map { t.money($0) }, moneyTone: (pnl ?? 0) >= 0 ? .up : .down,
                   result: result, daysLeft: Self.days(t.completeBy), progress: p.map { t.progress(at: $0) },
                   stop: t.price(t.stop), entry: t.price(t.entry), target: t.nextTarget.map { "TP\(t.nextTargetStage ?? 0) " + t.price($0) })
+        if !hideMoney {
+            stopMoney = t.pnl(at: t.stop).map { t.money($0) }
+            targetMoney = t.nextTarget.flatMap { t.pnl(at: $0) }.map { t.money($0) }
+        }
     }
 
     init(_ a: TradeActivityAttributes, _ s: TradeActivityAttributes.ContentState) {
@@ -101,6 +107,10 @@ struct TradeBoxModel {
                   money: TradeLiveText.money(a, s), moneyTone: (s.pnl ?? s.r ?? 0) >= 0 ? .up : .down,
                   result: result ?? s.note, daysLeft: Self.days(a.completeBy), progress: s.r == nil ? nil : s.progress,
                   stop: a.format(s.stop), entry: a.format(a.entry), target: s.nextTarget.map { "TP\(s.nextTargetStage ?? 0) " + a.format($0) })
+        if a.hideMoney != true {
+            stopMoney = s.stopPnl.map { a.money($0) }
+            targetMoney = s.targetPnl.map { a.money($0) }
+        }
     }
 }
 
@@ -150,12 +160,21 @@ struct TradeBox: View {
             }
             if showBar, let p = m.progress { bar(p) }
             if showLevels {
-                HStack {
-                    Text("Stop \(m.stop)").foregroundStyle(color(.down))
+                // Price on top, the whole-trade result at that level underneath.
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Stop \(m.stop)").foregroundStyle(color(.down))
+                        if let v = m.stopMoney { Text(v).fontWeight(.bold).foregroundStyle(color(v.hasPrefix("−") ? .down : .up)) }
+                    }
                     Spacer(minLength: 4)
                     Text("Entry \(m.entry)").foregroundStyle(secondary)
                     Spacer(minLength: 4)
-                    if let t = m.target { Text(t).foregroundStyle(color(.up)) }
+                    if let t = m.target {
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text(t).foregroundStyle(color(.up))
+                            if let v = m.targetMoney { Text(v).fontWeight(.bold).foregroundStyle(color(v.hasPrefix("−") ? .down : .up)) }
+                        }
+                    }
                 }
                 .font(.system(size: 10.5).monospacedDigit())
                 .lineLimit(1).minimumScaleFactor(0.75)
