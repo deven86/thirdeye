@@ -86,6 +86,8 @@ final class TradeStore {
         var added = 0
         for m in matches {
             guard var t = trade(id: m.tradeID), !t.fills.contains(where: { $0.brokerID == m.fill.id }) else { continue }
+            // A fill at the broker is real money: a paper trade it belongs to becomes a real one.
+            if t.mode == .paper { t.mode = .real }
             if let r = m.replacesFill, let i = t.fills.firstIndex(where: { $0.id == r }) {
                 // The fill you typed in is this Upstox fill: take the real price and time, don't add another.
                 t.fills[i].price = m.fill.price

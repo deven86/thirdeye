@@ -22,7 +22,7 @@ final class UpstoxSync {
 
     var attentionCount: Int {
         guard let plan else { return 0 }
-        return plan.unmatchedFills.count + plan.untracked.count + plan.mismatches.count
+        return plan.matches.count + plan.unmatchedFills.count + plan.untracked.count + plan.mismatches.count
             + plan.stops.filter { $0.brokerStop == nil }.count
     }
 
