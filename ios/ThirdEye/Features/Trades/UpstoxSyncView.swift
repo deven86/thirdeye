@@ -140,6 +140,13 @@ struct UpstoxSyncView: View {
                         ForEach(plan.stops) { s in
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(s.name).font(.callout.weight(.semibold))
+                                if s.overCovered {
+                                    Label("\(s.orderCount) stop orders for \(qty(s.orderQuantity)) shares — you hold \(qty(s.held)). Keep one, cancel the rest at Upstox (Orders → GTT).",
+                                          systemImage: "exclamationmark.triangle.fill")
+                                        .font(.caption.weight(.semibold)).foregroundStyle(palette.down)
+                                    Text("Triggers: " + s.triggers.map(px).joined(separator: ", ") + (s.firstTrigger.map { " · \(px($0)) fires first" } ?? ""))
+                                        .font(.caption2.monospacedDigit()).foregroundStyle(palette.textSecondary)
+                                }
                                 if let b = s.brokerStop {
                                     let same = abs(b - s.appStop) / max(s.appStop, 1e-9) < 0.002
                                     Label(same ? "Stop at Upstox \(px(b)) (\(s.kind ?? "")) — matches"

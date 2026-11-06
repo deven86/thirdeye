@@ -301,6 +301,13 @@ nonisolated enum UpstoxReconciler {
         var appStop: Double
         var brokerStop: Double?     // nil = no stop order at Upstox
         var kind: String?
+        var orderCount = 0          // stop orders at Upstox for this share
+        var orderQuantity = 0.0     // shares those orders would sell (buy, for a short)
+        var held = 0.0              // shares held at Upstox
+        var firstTrigger: Double?   // the one price reaches first (highest for a long)
+        var triggers: [Double] = []
+        /// More shares in stop orders than you hold: when price falls, several fire.
+        var overCovered: Bool { orderQuantity > held + 1e-9 }
     }
 
     nonisolated struct Plan: Sendable {
@@ -408,8 +415,11 @@ nonisolated enum UpstoxReconciler {
             if abs(b) < 1e-9 { continue }
             let protective = snapshot.stops.filter { productKey($0.instrumentKey) == key && $0.isBuy != t.isLong }
             let nearest = protective.min { abs($0.trigger - t.stopLoss) < abs($1.trigger - t.stopLoss) }
+            let first = t.isLong ? protective.map(\.trigger).max() : protective.map(\.trigger).min()
             plan.stops.append(StopCheck(tradeID: t.id, name: t.instrument.alertName, appStop: t.stopLoss,
-                                        brokerStop: nearest?.trigger, kind: nearest?.kind))
+                                        brokerStop: protective.count > 1 ? first : nearest?.trigger, kind: nearest?.kind,
+                                        orderCount: protective.count, orderQuantity: protective.reduce(0) { $0 + $1.quantity },
+                                        held: abs(b), firstTrigger: first, triggers: protective.map(\.trigger).sorted(by: >)))
         }
         let tracked = Set(working.values.filter { $0.status == .open || $0.status == .upcoming }.map { productKey($0.instrument.id) })
         var seen = Set<String>()

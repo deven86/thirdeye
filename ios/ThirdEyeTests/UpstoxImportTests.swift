@@ -178,6 +178,14 @@ struct UpstoxReconcilerTests {
         #expect(UpstoxPortfolioClient.sameFill(a, b))
     }
 
+    @Test func moreStopOrdersThanSharesIsFlagged() throws {
+        let t = trade(qty: 2)
+        let stops = [1300.0, 1355.6, 1355.6].map { BrokerStop(instrumentKey: trentKey, isBuy: false, trigger: $0, quantity: 2, kind: "GTT") }
+        let plan = UpstoxReconciler.plan(trades: [t], snapshot: BrokerSnapshot(fills: [], positions: [position(2)], stops: stops, warnings: []))
+        let s = try #require(plan.stops.first)
+        #expect(s.overCovered && s.orderCount == 3 && s.orderQuantity == 6 && s.firstTrigger == 1355.6)
+    }
+
     @Test func placeholderTradeForUntrackedPosition() {
         let t = UpstoxReconciler.trade(for: position(-4), instrument: trent, now: t0)
         #expect(!t.isLong && t.stopLoss > 3055 && t.status == .open)
