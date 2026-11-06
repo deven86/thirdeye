@@ -192,7 +192,9 @@ nonisolated struct UpstoxPortfolioClient: Sendable {
     static func parsePositions(_ data: Any) -> [BrokerPosition] {
         rows(data).compactMap { r in
             guard let key = str(r, "instrument_token", "instrument_key"), let q = num(r["quantity"]), q != 0 else { return nil }
-            let avg = num(r["average_price"]) ?? (q > 0 ? num(r["buy_price"]) : num(r["sell_price"])) ?? 0
+            // Upstox can send average_price 0 for a delivery bought today: fall back to the buy/sell price, then the last price.
+            let sideKeys = q > 0 ? ["buy_price", "day_buy_price", "overnight_buy_price"] : ["sell_price", "day_sell_price", "overnight_sell_price"]
+            let avg = (["average_price"] + sideKeys + ["last_price", "close_price"]).lazy.compactMap { num(r[$0]) }.first { $0 > 0 } ?? 0
             return BrokerPosition(instrumentKey: key, symbol: str(r, "trading_symbol", "tradingsymbol") ?? key, exchange: str(r, "exchange") ?? "",
                                   quantity: q, averagePrice: avg, lastPrice: num(r["last_price"]), pnl: num(r["pnl"]),
                                   product: str(r, "product"), source: "position")
@@ -203,7 +205,8 @@ nonisolated struct UpstoxPortfolioClient: Sendable {
         rows(data).compactMap { r in
             guard let key = str(r, "instrument_token", "instrument_key"), let q = num(r["quantity"]), q > 0 else { return nil }
             return BrokerPosition(instrumentKey: key, symbol: str(r, "trading_symbol", "tradingsymbol") ?? key, exchange: str(r, "exchange") ?? "",
-                                  quantity: q, averagePrice: num(r["average_price"]) ?? 0, lastPrice: num(r["last_price"]),
+                                  quantity: q, averagePrice: ["average_price", "last_price", "close_price"].lazy.compactMap { num(r[$0]) }.first { $0 > 0 } ?? 0,
+                                  lastPrice: num(r["last_price"]),
                                   pnl: num(r["pnl"]), product: "D", source: "holding")
         }
     }

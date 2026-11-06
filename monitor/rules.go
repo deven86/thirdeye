@@ -126,7 +126,7 @@ func Evaluate(t WatchTrade, price float64, now time.Time, m *Memory, s Settings,
 		}
 		if !stopHit {
 			for _, tg := range t.Targets {
-				if tg.Booked || tg.Price == nil {
+				if tg.Booked || tg.Price == nil || *tg.Price <= 0 {
 					continue
 				}
 				if (long && price >= *tg.Price) || (!long && price <= *tg.Price) {

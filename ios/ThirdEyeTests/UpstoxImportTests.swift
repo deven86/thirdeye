@@ -50,6 +50,10 @@ struct UpstoxParserTests {
                                           ["instrument_token": "NSE_EQ|X", "quantity": 0]]]
         let p = UpstoxPortfolioClient.parsePositions(pos)
         #expect(p.count == 1 && p[0].quantity == -4)
+        // Delivery bought today: Upstox may send average_price 0 — use the buy price, never 0.
+        let today: [String: Any] = ["data": [["instrument_token": "BSE_EQ|INE019A01038", "trading_symbol": "JSWSTEEL", "exchange": "BSE",
+                                             "quantity": 2, "average_price": 0, "buy_price": 1336.6, "last_price": 1346.8]]]
+        #expect(UpstoxPortfolioClient.parsePositions(today).first?.averagePrice == 1336.6)
     }
 
     @Test func stopsFromOrdersAndGTT() {

@@ -66,7 +66,8 @@ final class UpstoxSync {
         replan(trades)
     }
 
-    func track(_ p: BrokerPosition, trades: TradeStore, market: MarketStore) -> UUID {
+    func track(_ p: BrokerPosition, trades: TradeStore, market: MarketStore) -> UUID? {
+        guard p.averagePrice > 0 else { error = "Upstox didn't send a price for \(p.symbol) — try again in a minute."; return nil }
         let instrument = market.index.instrument(id: p.instrumentKey) ?? UpstoxReconciler.fallbackInstrument(p)
         let t = UpstoxReconciler.trade(for: p, instrument: instrument)
         trades.save(t)

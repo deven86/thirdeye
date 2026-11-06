@@ -101,7 +101,7 @@ nonisolated struct MonitorWatchTrade: Codable, Hashable, Sendable {
             initialStop: t.initialStop, avgEntry: summary.averageEntry, openQuantity: summary.openQuantity,
             contractSize: t.instrument.contractSize, realized: summary.realized,
             targets: t.takeProfits.map {
-                Target(stage: $0.stage, price: $0.price, r: $0.rMultiple, bookPercent: $0.bookPercent, then: $0.then,
+                Target(stage: $0.stage, price: $0.price.flatMap { $0 > 0 ? $0 : nil }, r: $0.rMultiple, bookPercent: $0.bookPercent, then: $0.then,
                        booked: booked.contains($0.stage))
             },
             levels: levels(t),

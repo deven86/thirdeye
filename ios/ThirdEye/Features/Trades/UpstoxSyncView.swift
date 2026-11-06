@@ -63,6 +63,7 @@ struct UpstoxSyncView: View {
                                     .font(.caption).foregroundStyle(palette.textSecondary)
                                 HStack {
                                     Button("Track in Third Eye") { openTrade = sync.track(p, trades: trades, market: market) }
+                                        .disabled(p.averagePrice <= 0)
                                         .buttonStyle(.borderless)
                                     Spacer()
                                     Button("Ignore", role: .destructive) { sync.ignore("pos:\(p.instrumentKey)", trades: trades) }
