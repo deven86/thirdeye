@@ -39,6 +39,8 @@ struct SettingsView: View {
                 }
             }
 
+            ExtraSearchSettingsSection()
+
             Section("Markets") {
                 NavigationLink {
                     MarketDataSettingsView()

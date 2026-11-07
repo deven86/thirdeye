@@ -141,6 +141,9 @@ struct NewTradeSheet: View {
                 } footer: {
                     Text("Suggested quantity loses \(riskPercent.isEmpty ? "—" : riskPercent)% of capital if the stop is hit\(instrument.lotSize.map { $0 > 1 ? ", rounded down to lots of \(Int($0))" : "" } ?? "").\(instrument.contractSize > 1 ? " Counted in lots like MetaTrader: 1 lot = \(Int(instrument.contractSize).formatted()) units, 0.01 = micro lot." : "")")
                 }
+                if settings.showExtraVIX && VIXSizing.applies(to: instrument) {
+                    ExtraVIXSection(instrument: instrument, suggestedQuantity: suggestedQuantity, quantity: $quantity)
+                }
                 Section {
                     ForEach(guardChecks) { c in
                         Label {

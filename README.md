@@ -34,4 +34,5 @@ cd ios && xcodegen generate && open ThirdEye.xcodeproj
 - [ ] **M6 Alerts** — Windows PC monitor (Go) + native push; setup guide [docs/ALERTS.md](docs/ALERTS.md) (DECISIONS #46–50)
 - [x] **0.9 extras** — report card (grades every analysis afterwards), stage reuse for cheaper repeats, risk guard (DECISIONS #51–53)
 - [ ] **Lock Screen live trade + widgets** — after alerts work (needs App Group + widget extension)
+- [x] **0.15 Extra Search** — optional second opinion (bull/bear/judge), stage disagreements, ± spread, India VIX size advice, track record; off by default (DECISIONS #54–59)
 - [ ] M8 Calibration + hardening

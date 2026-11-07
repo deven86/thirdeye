@@ -27,6 +27,10 @@ final class AppSettings {
         static let skin = "settings.skin"
         static let skinDim = "settings.skinDim"
         static let skinPhotoVersion = "settings.skinPhotoVersion"
+        static let extraSearchEnabled = "settings.extraSearch.enabled"
+        static let extraSuggestPercent = "settings.extraSearch.suggestPercent"
+        static let extraVIXSizing = "settings.extraSearch.vixSizing"
+        static let extraConflictWarnings = "settings.extraSearch.conflictWarnings"
     }
 
     private let defaults: UserDefaults
@@ -138,6 +142,31 @@ final class AppSettings {
         didSet { defaults.set(watchNotifications, forKey: Keys.watchNotifications) }
     }
 
+    // MARK: Extra Search (0.15.0) — off by default; when off, nothing below changes anything in the app.
+
+    /// Main switch. Off = Third Eye works exactly as before.
+    var extraSearchEnabled: Bool {
+        didSet { defaults.set(extraSearchEnabled, forKey: Keys.extraSearchEnabled) }
+    }
+
+    /// Suggest an Extra Search when the planned position is at least this % of capital (0 = never suggest).
+    var extraSuggestPercent: Double {
+        didSet { defaults.set(extraSuggestPercent, forKey: Keys.extraSuggestPercent) }
+    }
+
+    /// Show India VIX size advice when saving a trade (advice only — the quantity is never changed for you).
+    var extraVIXSizing: Bool {
+        didSet { defaults.set(extraVIXSizing, forKey: Keys.extraVIXSizing) }
+    }
+
+    /// Show a free, code-computed warning when stage groups disagree.
+    var extraConflictWarnings: Bool {
+        didSet { defaults.set(extraConflictWarnings, forKey: Keys.extraConflictWarnings) }
+    }
+
+    var showExtraVIX: Bool { extraSearchEnabled && extraVIXSizing }
+    var showExtraConflicts: Bool { extraSearchEnabled && extraConflictWarnings }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         theme = AppTheme(rawValue: defaults.string(forKey: Keys.theme) ?? "") ?? .liquidGlass
@@ -165,6 +194,10 @@ final class AppSettings {
         skin = Skin(rawValue: defaults.string(forKey: Keys.skin) ?? "") ?? .none
         skinDim = defaults.object(forKey: Keys.skinDim) as? Double ?? 0.25
         skinPhotoVersion = defaults.integer(forKey: Keys.skinPhotoVersion)
+        extraSearchEnabled = defaults.object(forKey: Keys.extraSearchEnabled) as? Bool ?? false
+        extraSuggestPercent = defaults.object(forKey: Keys.extraSuggestPercent) as? Double ?? 10
+        extraVIXSizing = defaults.object(forKey: Keys.extraVIXSizing) as? Bool ?? true
+        extraConflictWarnings = defaults.object(forKey: Keys.extraConflictWarnings) as? Bool ?? true
         if let data = defaults.data(forKey: Keys.tierAssignments),
            let decoded = try? JSONDecoder().decode([String: ModelRef].self, from: data) {
             var map: [ModelTier: ModelRef] = [:]
