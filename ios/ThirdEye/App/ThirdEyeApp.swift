@@ -15,6 +15,7 @@ struct ThirdEyeApp: App {
     @State private var guardian = TradeGuardian()
     @State private var live = LiveActivityManager.shared
     @State private var upstoxSync = UpstoxSync()
+    @State private var extraSearches = ExtraSearchStore()
 
     var body: some Scene {
         WindowGroup {
@@ -33,6 +34,7 @@ struct ThirdEyeApp: App {
             .environment(guardian)
             .environment(live)
             .environment(upstoxSync)
+            .environment(extraSearches)
         }
     }
 }

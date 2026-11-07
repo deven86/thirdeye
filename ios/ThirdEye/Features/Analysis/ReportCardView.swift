@@ -5,6 +5,7 @@ struct ReportCardView: View {
     @Environment(AnalysisStore.self) private var analyses
     @Environment(OutcomeStore.self) private var outcomes
     @Environment(MarketStore.self) private var market
+    @Environment(AppSettings.self) private var settings
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -79,6 +80,9 @@ struct ReportCardView: View {
                 Text("Each stage's direction calls")
             } footer: {
                 Text("How often a stage that leaned up (score ≥ 55) or down (≤ 45) was right. After about 50 results per stage, the weak ones can be given less weight — that is the calibration step.")
+            }
+            if settings.extraSearchEnabled {
+                ExtraReportCardSection()
             }
         }.skinRows()
         }

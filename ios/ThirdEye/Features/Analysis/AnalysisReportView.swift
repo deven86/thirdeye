@@ -19,6 +19,9 @@ struct AnalysisReportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 scoreCard
+                if settings.extraSearchEnabled {
+                    ExtraSearchCard(run: run)
+                }
                 ActionPlanCard(plan: ActionPlanner.build(run, inputs: .init(capital: settings.capital[run.instrument.currency],
                                                                              riskPercent: settings.riskPercent,
                                                                              paperMode: settings.paperMode)))
